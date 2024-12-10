@@ -1,0 +1,59 @@
+# Debug settings
+[debug]
+streaming = false  # Control streaming debug output
+
+# App layout
+
+[layout]
+show_3d_scene = true  # Default to true if not specified
+title = "Connect"  # Optional app title
+logo_path = "assets/logo.png"
+
+[layout.plot]
+type = "line"  # Could support: line, scatter, bar, etc.
+title = "Streaming Data Plot"
+x_label = "Time (s)"
+y_label = "Value"
+
+[[layout.input_fields]]
+id = "filter"
+label = "Filter Expression"
+
+[[layout.input_fields]]
+id = "threshold"
+label = "Threshold Value"
+
+[[layout.sliders]]
+id = "frequency"
+label = "Frequency"
+min = 0.0
+max = 10.0
+default = 1.0
+
+[[layout.sliders]]
+id = "y_axis_offset"
+label = "Offset"
+min = -5.0
+max = 5.0
+default = 0.0
+
+# Python scripts
+
+[[scripts]]
+name = "Print random"
+path = "scripts/rand.py"
+type = "discrete"
+
+[[scripts]]
+name = "Sine Wave"
+path = "scripts/stream_example.py"
+type = "streaming"
+
+[[scripts]]
+name = "Echo inputs"
+path = "scripts/echo.py"
+type = "discrete"
+functions = [
+    { name = "echo_one", display = "Field 1" },
+    { name = "echo_two", display = "Field 2" }
+]
