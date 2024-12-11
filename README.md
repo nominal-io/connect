@@ -21,7 +21,7 @@ source .venv/bin/activate
 
 ### Running Python scripts
 
-Python scripts that connect to your hardware are set in the [scripts.toml](https://github.com/nominal-io/connect/blob/main/scripts.toml) file:
+Python scripts that connect to your hardware are set in a config.toml file:
 
 ```toml
 [[scripts]]
@@ -31,12 +31,12 @@ type = "discrete"
 
 [[scripts]]
 name = "Sine Wave"
-path = "scripts/stream_example.py"
+path = "stream_example.py"
 type = "streaming"
 
 [[scripts]]
 name = "Echo inputs"
-path = "scripts/echo.py"
+path = "echo.py"
 type = "discrete"
 functions = [
     { name = "echo_one", display = "Field 1" },
@@ -44,13 +44,13 @@ functions = [
 ]
 ```
 
-By convention, the Python scripts are in the [scripts folder](https://github.com/nominal-io/connect/tree/main/src/scripts), but an absolute path to a script can be specified as well. In the future, additional languages may be supported (C, Rust, MATLAB, etc).
+In the future, additional languages may be supported (C, Rust, MATLAB, etc).
 
 - `discrete` scripts are run once
 - `streaming` scripts are run continuously and can push to an IPC (ZMQ) channel
 - To execute individual functions within a script file, set the `functions` parameter.
 
-Scripts can receive an app state - a JSON payload of return values from other scripts and the UI state of various input widgets (sliders, text fields, etc). See [echo.py](https://github.com/nominal-io/connect/blob/main/src/scripts/echo.py#L20) for a simple example of extracting app state in Python.
+Scripts can receive an app state - a JSON payload of return values from other scripts and the UI state of various input widgets (sliders, text fields, etc). See `echo.py` in `recipes/kitchen_sink` for a simple example of extracting app state in Python.
 
 ### App layout
 
@@ -67,7 +67,8 @@ default = 1.0
 
 ## Screenshot
 
-<img width="984" alt="image" src="https://github.com/user-attachments/assets/3d014e0f-5755-46cc-90f7-9ab88473c5a5">
+<img width="1271" alt="image" src="https://github.com/user-attachments/assets/24c59730-d69a-4ad1-b8a4-81c8f5f5527d">
+
 
 
 
