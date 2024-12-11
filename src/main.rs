@@ -3,7 +3,7 @@ mod camera;
 mod scene;
 
 use streaming::{StreamManager, update_streams};
-use camera::{orbit_camera, camera_ui};
+use camera::orbit_camera;
 use scene::setup;
 
 use bevy::prelude::*;
@@ -16,6 +16,9 @@ use std::fs;
 use std::io::Write;
 use serde_json;
 use bevy::window::{WindowMode, Window};
+use std::path::{PathBuf, Path};
+use tinyfiledialogs::open_file_dialog;
+use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum AppSet {
@@ -40,25 +43,36 @@ struct ScriptConfig {
 
 #[derive(Deserialize, Debug, Default)]
 struct InputFieldConfig {
+    #[serde(default)]
     id: String,
+    #[serde(default)]
     label: String,
+    #[serde(default)]
+    tab: String,
 }
 
 #[derive(Deserialize, Debug, Default)]
 struct PlotConfig {
-    // We can add fields back when we need them
+    #[serde(default)]
+    plot_type: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    x_label: String,
+    #[serde(default)]
+    y_label: String,
+    #[serde(default)]
+    tab: String,
 }
 
 #[derive(Deserialize, Debug)]
 struct SliderConfig {
     id: String,
     label: String,
-    #[serde(default = "default_slider_min")]
     min: f32,
-    #[serde(default = "default_slider_max")]
     max: f32,
-    #[serde(default = "default_slider_value")]
     default: f32,
+    tab: String,
 }
 
 impl Default for SliderConfig {
@@ -69,6 +83,7 @@ impl Default for SliderConfig {
             min: default_slider_min(),
             max: default_slider_max(),
             default: default_slider_value(),
+            tab: String::new(),
         }
     }
 }
@@ -93,14 +108,18 @@ struct Config {
 
 #[derive(Deserialize, Debug, Default)]
 struct LayoutConfig {
-    #[serde(default = "default_show_3d")]
-    show_3d_scene: bool,
     #[serde(default)]
+    show_3d_scene: bool,
     title: Option<String>,
+    logo_path: Option<String>,
+    #[serde(default)]
+    right_panel: RightPanelConfig,
+    #[serde(default)]
+    docs: DocsConfig,
+    #[serde(default)]
+    plot: PlotConfig,
     #[serde(default)]
     input_fields: Vec<InputFieldConfig>,
-    #[serde(default)]
-    plot: Option<PlotConfig>,
     #[serde(default)]
     sliders: Vec<SliderConfig>,
 }
@@ -115,6 +134,7 @@ struct AppState {
     input_values: HashMap<String, String>,
     script_results: HashMap<String, String>,
     slider_values: HashMap<String, f32>,
+    opened_file: Option<PathBuf>,
 }
 
 impl AppState {
@@ -128,12 +148,62 @@ struct ScriptOutputs {
     results: Vec<String>,
 }
 
+#[derive(Resource, Default)]
+struct MarkdownCache {
+    cache: CommonMarkCache,
+}
+
+#[derive(Resource, Default)]
+struct UiState {
+    selected_tab: String,
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct RightPanelConfig {
+    #[serde(default)]
+    enabled: bool,
+    #[serde(default = "default_panel_width")]
+    default_width: f32,
+    #[serde(default)]
+    tabs: Vec<TabConfig>,
+}
+
+fn default_panel_width() -> f32 { 0.3 }
+
+#[derive(Deserialize, Debug, Default)]
+struct TabConfig {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    label: String,
+    #[serde(default)]
+    order: Option<i32>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct DocsConfig {
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    tab: String,
+}
+
 fn main() {
-    let content = fs::read_to_string("scripts.toml").unwrap_or_default();
+    let default_config = PathBuf::from("recipes/1_kitchen_sink/config.toml");
+    let content = fs::read_to_string(&default_config).unwrap_or_default();
     let config: Config = toml::from_str(&content).unwrap_or_default();
     
-    let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+    // Get the initial tab from config
+    let initial_tab = config.layout.right_panel.tabs
+        .first()
+        .map(|tab| tab.id.clone())
+        .unwrap_or_default();
+
+    let mut app = bevy::prelude::App::new();
+    
+    // Configure default plugins based on whether 3D scene is enabled
+    if config.layout.show_3d_scene {
+        app.add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: config.layout.title.unwrap_or("Connect".to_string()).into(),
                 mode: WindowMode::Windowed,
@@ -141,20 +211,27 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(EguiPlugin)
+        .add_systems(Startup, setup)
+        .add_systems(Update, (
+            orbit_camera,
+        ).in_set(AppSet::Main));
+    } else {
+        // Use a minimal set of plugins when 3D scene is disabled
+        app.add_plugins(DefaultPlugins.build().disable::<bevy::render::RenderPlugin>());
+    }
+
+    app.add_plugins(EguiPlugin)
         .insert_resource(StreamManager::new(config.debug.streaming))
         .insert_resource(ScriptOutputs::default())
-        .insert_resource(AppState::default())
+        .insert_resource(AppState {
+            opened_file: Some(default_config),
+            ..default()
+        })
+        .insert_resource(UiState {
+            selected_tab: initial_tab,
+        })
+        .insert_resource(MarkdownCache::default())
         .configure_sets(Update, AppSet::Main);
-
-    // Only add 3D scene systems if enabled
-    if config.layout.show_3d_scene {
-        app.add_systems(Startup, setup)
-           .add_systems(Update, (
-               orbit_camera,
-               camera_ui,
-           ).in_set(AppSet::Main));
-    }
 
     app.add_systems(Update, (
         egui_system,
@@ -169,8 +246,15 @@ fn execute_script(
     app_state: &mut AppState,
     script_outputs: &mut ScriptOutputs,
 ) {
-    let full_path = format!("src/{}", script.path);
-    println!("Executing script: {} ({})", script.name, full_path);
+    // Get the directory of the current config file
+    let config_dir = app_state.opened_file
+        .as_ref()
+        .and_then(|p| p.parent())
+        .unwrap_or_else(|| Path::new("."));
+    
+    // Combine the config directory with the script path
+    let script_path = config_dir.join(&script.path);
+    println!("Executing script: {} ({})", script.name, script_path.display());
     
     // Create a simplified state object that includes both input values and slider values
     let simplified_state = serde_json::json!({
@@ -180,7 +264,7 @@ fn execute_script(
     
     // Create command with script path
     let mut command = Command::new("python3");
-    command.arg(&full_path)
+    command.arg(&script_path)
            .stdin(Stdio::piped())
            .stdout(Stdio::piped())
            .stderr(Stdio::piped());
@@ -218,16 +302,45 @@ fn execute_script(
     }
 }
 
+// First, let's add a helper function to check for streaming scripts
+fn has_streaming_scripts(scripts: &[ScriptConfig]) -> bool {
+    scripts.iter().any(|script| script.script_type == "streaming")
+}
+
 fn egui_system(
+    mut commands: Commands,
     mut contexts: EguiContexts,
     mut script_outputs: ResMut<ScriptOutputs>,
     mut stream_manager: ResMut<StreamManager>,
     mut app_state: ResMut<AppState>,
+    mut ui_state: ResMut<UiState>,
     windows: Query<&Window>,
+    mut markdown_cache: ResMut<MarkdownCache>,
+    camera_query: Query<Entity, With<Camera3d>>,
+    light_query: Query<Entity, With<PointLight>>,
+    mesh_query: Query<Entity, With<Mesh3d>>,
+    asset_server: Res<AssetServer>,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let content = fs::read_to_string("scripts.toml").unwrap_or_default();
+    // Create a longer-lived binding for the default path
+    let default_path = PathBuf::from("config.toml");
+    let config_path = app_state.opened_file.as_ref().unwrap_or(&default_path);
+    let content = fs::read_to_string(config_path).unwrap_or_default();
     let config: Config = toml::from_str(&content).unwrap_or_default();
     
+    // Show help text only if 3D scene is enabled
+    if config.layout.show_3d_scene {
+        egui::Area::new("help_text".into())
+            .fixed_pos(egui::pos2(10.0, 40.0))
+            .show(contexts.ctx_mut(), |ui| {
+                ui.vertical(|ui| {
+                    ui.label("Shift-click to pan");
+                    ui.label("Cmd-click to drag");
+                });
+            });
+    }
+
     // Get the window width
     let window_width = windows.single().width();
 
@@ -241,12 +354,80 @@ fn egui_system(
     // Scripts panel
     egui::TopBottomPanel::bottom("scripts_panel").show(contexts.ctx_mut(), |ui| {
         ui.horizontal(|ui| {
+            if ui.button("Open File").clicked() {
+                if let Some(path_str) = open_file_dialog(
+                    "Open File",
+                    "~",
+                    None,
+                ) {
+                    println!("Selected file: {}", path_str);
+                    let new_path = PathBuf::from(path_str);
+                    // Reload the app state when a new config is selected
+                    match fs::read_to_string(&new_path) {
+                        Ok(new_content) => {
+                            match toml::from_str::<Config>(&new_content) {
+                                Ok(new_config) => {
+                                    println!("Config loaded successfully: {:?}", new_config);
+                                    
+                                    // Clear existing state
+                                    app_state.input_values.clear();
+                                    app_state.script_results.clear();
+                                    app_state.slider_values.clear();
+                                    
+                                    // Clear 3D scene if show_3d_scene is false
+                                    if !new_config.layout.show_3d_scene {
+                                        for camera_entity in camera_query.iter() {
+                                            commands.entity(camera_entity).despawn_recursive();
+                                        }
+                                        for light_entity in light_query.iter() {
+                                            commands.entity(light_entity).despawn_recursive();
+                                        }
+                                        for entity in mesh_query.iter() {
+                                            commands.entity(entity).despawn_recursive();
+                                        }
+                                    } else {
+                                        // Reinitialize the 3D scene if show_3d_scene is true
+                                        setup(commands, asset_server, meshes, materials);
+                                    }
+                                    
+                                    // Initialize sliders with default values from new config
+                                    for slider in &new_config.layout.sliders {
+                                        app_state.slider_values.insert(slider.id.clone(), slider.default);
+                                    }
+                                    
+                                    // Update the file path
+                                    app_state.opened_file = Some(new_path);
+                                    
+                                    // Update the selected tab to the first available tab
+                                    if let Some(first_tab) = new_config.layout.right_panel.tabs.first() {
+                                        ui_state.selected_tab = first_tab.id.clone();
+                                    }
+                                    
+                                    // Stop any running streams
+                                    stream_manager.stop_streaming();
+                                }
+                                Err(e) => {
+                                    println!("Failed to parse config: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!("Failed to read file: {}", e);
+                        }
+                    }
+                }
+            }
+            
             if ui.button(egui::RichText::new("Execute All Scripts").color(egui::Color32::from_rgb(0, 255, 0)))
                 .clicked() 
             {
                 println!("Button clicked!");
                 script_outputs.results.clear();
-                stream_manager.start_streaming();
+                
+                // Only start streaming if there are streaming scripts
+                if has_streaming_scripts(&config.scripts) {
+                    stream_manager.start_streaming();
+                }
                 
                 // Execute discrete scripts
                 for script in &config.scripts {
@@ -261,13 +442,20 @@ fn egui_system(
                             }
                         }
                     } else if script.script_type == "streaming" {
-                        let path = script.path.clone();
-                        println!("Launching streaming script: {} ({})", script.name, path);
+                        // Get the directory of the current config file
+                        let config_dir = app_state.opened_file
+                            .as_ref()
+                            .and_then(|p| p.parent())
+                            .unwrap_or_else(|| Path::new("."));
+                        
+                        // Combine the config directory with the script path
+                        let script_path = config_dir.join(&script.path);
+                        println!("Launching streaming script: {} ({})", script.name, script_path.display());
                         
                         // Pass app state to streaming script
                         let state_json = app_state.to_json();
                         let mut child = Command::new("python3")
-                            .arg(&format!("src/{}", path))
+                            .arg(&script_path)  // Use the resolved path
                             .stdin(Stdio::piped())
                             .spawn()
                             .expect("Failed to spawn streaming script");
@@ -281,8 +469,16 @@ fn egui_system(
                 }
             }
             
-            if ui.button("Stop Streaming").clicked() {
-                stream_manager.stop_streaming();
+            // Only show stop streaming button if there are streaming scripts
+            if has_streaming_scripts(&config.scripts) {
+                if ui.button("Stop Streaming").clicked() {
+                    stream_manager.stop_streaming();
+                }
+            }
+
+            // Add the file path display
+            if let Some(path) = &app_state.opened_file {
+                ui.label(format!("Selected: {}", path.display()));
             }
         });
 
@@ -295,11 +491,11 @@ fn egui_system(
                 // Add headers with custom widths
                 ui.label("Script");
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
-                    ui.set_min_width(200.0);  // Make Actions column wider
+                    ui.set_min_width(200.0);
                     ui.label("Actions");
                 });
                 ui.label("Output");
-                ui.label("");  // Empty column for alignment
+                ui.label("");
                 ui.end_row();
 
                 // Display discrete scripts and their outputs
@@ -335,96 +531,136 @@ fn egui_system(
                     }
                 }
                 
-                // Streaming scripts section
-                ui.label("Streaming Scripts");
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
-                    ui.set_min_width(200.0);
-                    ui.label("Status");
-                });
-                ui.label("");
-                ui.label("");
-                ui.end_row();
-                
-                for script in &config.scripts {
-                    if script.script_type == "streaming" {
-                        ui.label(&script.path);
-                        ui.label(if stream_manager.is_running() { "Running" } else { "Stopped" });
-                        ui.label("");
-                        ui.label("");
-                        ui.end_row();
+                // Only show streaming scripts section if there are streaming scripts
+                if has_streaming_scripts(&config.scripts) {
+                    ui.label("Streaming Scripts");
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
+                        ui.set_min_width(200.0);
+                        ui.label("Status");
+                    });
+                    ui.label("");
+                    ui.label("");
+                    ui.end_row();
+                    
+                    for script in &config.scripts {
+                        if script.script_type == "streaming" {
+                            ui.label(&script.path);
+                            ui.label(if stream_manager.is_running() { "Running" } else { "Stopped" });
+                            ui.label("");
+                            ui.label("");
+                            ui.end_row();
+                        }
                     }
                 }
             });
     });
 
-    // Plot panel with configurable settings
-    egui::SidePanel::right("plot_panel")
-        .default_width(window_width * 0.5)
-        .resizable(true)
-        .show(contexts.ctx_mut(), |ui| {
-            if let Some(_plot_config) = &config.layout.plot {
-                let plot = Plot::new("streaming_plot")
-                    .view_aspect(2.0);
-                
-                plot.show(ui, |plot_ui| {
-                    if let Ok(streams) = stream_manager.as_ref().streams.lock() {
-                        for (stream_id, points) in streams.iter() {
-                            if points.is_empty() {
-                                if stream_manager.as_ref().debug {
-                                    println!("Stream {} has no points to plot", stream_id);
-                                }
-                                continue;
-                            }
-                            
-                            if stream_manager.as_ref().debug {
-                                println!("Plotting {} points for stream {}", points.len(), stream_id);
-                                println!("First point: {:?}, Last point: {:?}", 
-                                    points.first(), points.last());
-                                // Clone the HashMap for serialization
-                                let streams_data = streams.clone();
-                                println!("Current streams data: {}", serde_json::to_string(&streams_data).unwrap());
-                            }
-                            
-                            let line = Line::new(PlotPoints::new(points.clone()))
-                                .name(stream_id)
-                                .width(2.0);
-                            plot_ui.line(line);
+    // Update the right panel code:
+    if config.layout.right_panel.enabled {
+        egui::SidePanel::right("right_panel")
+            .default_width(window_width * config.layout.right_panel.default_width)
+            .resizable(true)
+            .show(contexts.ctx_mut(), |ui| {
+                // Tab Bar
+                ui.horizontal(|ui| {
+                    for tab in &config.layout.right_panel.tabs {
+                        let selected = ui_state.selected_tab == tab.id;
+                        if ui.selectable_label(selected, &tab.label).clicked() {
+                            ui_state.selected_tab = tab.id.clone();
                         }
-                    } else if stream_manager.as_ref().debug {
-                        println!("Failed to lock streams for plotting");
                     }
                 });
-            }
 
-            // Render input fields
-            if !config.layout.input_fields.is_empty() {
-                ui.vertical(|ui| {
-                    for field in &config.layout.input_fields {
-                        ui.horizontal(|ui| {
-                            ui.label(&field.label);
-                            let value = app_state.input_values.entry(field.id.clone())
-                                .or_insert_with(String::new);
-                            ui.text_edit_singleline(value);
-                        });
-                    }
-                });
-            }
+            ui.separator();
 
-            // Update slider rendering section
-            if !config.layout.sliders.is_empty() {
-                ui.separator();
-                ui.vertical(|ui| {
-                    for slider in &config.layout.sliders {
-                        ui.horizontal(|ui| {
-                            ui.label(&slider.label);
-                            let value = app_state.slider_values.entry(slider.id.clone())
-                                .or_insert(slider.default);
-                            let _ = ui.add(egui::Slider::new(value, slider.min..=slider.max));
-                        });
+                // Tab Content
+                match ui_state.selected_tab.as_str() {
+                    tab_id => {
+                        // Documentation
+                        if config.layout.docs.tab == tab_id {
+                            if let Some(opened_file) = &app_state.opened_file {
+                                let full_docs_path = opened_file.parent()
+                                    .unwrap_or_else(|| Path::new(""))
+                                    .join(&config.layout.docs.path);
+                                
+                                match fs::read_to_string(&full_docs_path) {
+                                    Ok(content) => {
+                                        egui::ScrollArea::vertical().show(ui, |ui| {
+                                            CommonMarkViewer::new()
+                                                .show(ui, &mut markdown_cache.cache, &content);
+                                        });
+                                    },
+                                    Err(e) => {
+                                        ui.label(format!("Could not load documentation: {}", e));
+                                    }
+                                }
+                            }
+                        }
+
+                        // Plot
+                        if config.layout.plot.tab == tab_id {
+                            let plot = Plot::new("streaming_plot")
+                                .view_aspect(2.0);
+                            plot.show(ui, |plot_ui| {
+                                if has_streaming_scripts(&config.scripts) {
+                                    if let Ok(streams) = stream_manager.as_ref().streams.lock() {
+                                        for (stream_id, points) in streams.iter() {
+                                            if !points.is_empty() {
+                                                let line = Line::new(PlotPoints::new(points.clone()))
+                                                    .name(stream_id)
+                                                    .width(2.0);
+                                                plot_ui.line(line);
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        }
+
+                        // Input Fields
+                        let tab_input_fields: Vec<_> = config.layout.input_fields.iter()
+                            .filter(|field| field.tab == tab_id)
+                            .collect();
+                        
+                        if !tab_input_fields.is_empty() {
+                            ui.vertical(|ui| {
+                                for field in tab_input_fields {
+                                    ui.horizontal(|ui| {
+                                        ui.label(&field.label);
+                                        let value = app_state.input_values
+                                            .entry(field.id.clone())
+                                            .or_insert_with(String::new);
+                                        ui.text_edit_singleline(value);
+                                    });
+                                }
+                            });
+                        }
+
+                        // Sliders
+                        let tab_sliders: Vec<_> = config.layout.sliders.iter()
+                            .filter(|slider| slider.tab == tab_id)
+                            .collect();
+                        
+                        if !tab_sliders.is_empty() {
+                            ui.vertical(|ui| {
+                                for slider in tab_sliders {
+                                    ui.horizontal(|ui| {
+                                        ui.label(&slider.label);
+                                        let value = app_state.slider_values
+                                            .entry(slider.id.clone())
+                                            .or_insert(slider.default);
+                                        let _ = ui.add(egui::Slider::new(
+                                            value, 
+                                            slider.min..=slider.max
+                                        ));
+                                    });
+                                }
+                            });
+                        }
                     }
-                });
-            }
-        });
+                }
+            });
+    }
 }
 
 

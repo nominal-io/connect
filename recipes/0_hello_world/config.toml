@@ -1,0 +1,28 @@
+# Debug settings
+[debug]
+streaming = false
+
+# App layout
+[layout]
+show_3d_scene = false
+title = "Hello World"
+
+# Right panel configuration
+[layout.right_panel]
+enabled = true
+default_width = 0.5  # Fraction of window width
+
+# Define available tabs
+[[layout.right_panel.tabs]]
+id = "docs"
+label = "Instructions"
+
+# Documentation configuration
+[layout.docs]
+path = "instructions.md"
+tab = "docs"  # Assign to first tab
+
+[[scripts]]
+name = "Hello World"
+path = "hello_world.py"
+type = "discrete"

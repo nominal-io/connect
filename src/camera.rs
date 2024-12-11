@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::EguiContexts;
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::input::ButtonInput;
 
@@ -15,12 +15,13 @@ impl OrbitCamera {
     pub fn default() -> Self {
         Self {
             focus: Vec3::ZERO,
-            radius: 10.0,
+            radius: 50.0,
             min_radius: 2.0,
-            max_radius: 30.0,
+            max_radius: 100.0,
         }
     }
 
+    #[allow(dead_code)]
     pub fn reset_to_home(&mut self, transform: &mut Transform) {
         self.focus = Vec3::ZERO;
         self.radius = 10.0;
@@ -121,23 +122,4 @@ pub fn orbit_camera(
         // Always look at focus point
         transform.look_at(orbit.focus, Vec3::Y);
     }
-}
-
-pub fn camera_ui(
-    mut contexts: EguiContexts,
-    mut camera_query: Query<(&mut Transform, &mut OrbitCamera)>,
-) {
-    egui::Window::new("")
-        .fixed_size([150.0, 50.0])
-        .resizable(false)
-        .title_bar(false)
-        .show(contexts.ctx_mut(), |ui| {
-            if ui.button("Reset Camera").clicked() {
-                if let Ok((mut transform, mut camera)) = camera_query.get_single_mut() {
-                    camera.reset_to_home(&mut transform);
-                }
-            }
-            ui.label(egui::RichText::new("Shift-drag to pan").small().weak());
-            ui.label(egui::RichText::new("⌘-drag to rotate").small().weak());
-        });
 }
