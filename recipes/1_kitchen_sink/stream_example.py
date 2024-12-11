@@ -21,9 +21,9 @@ def stream_data():
     
     # Data streaming socket
     socket = context.socket(zmq.PUSH)
-    print("Connecting to ZMQ socket...", flush=True)
-    socket.connect("tcp://localhost:5555")
-    print("Connected to ZMQ socket", flush=True)
+    print("Creating ZMQ PUSH socket...", flush=True)
+    socket.bind("tcp://*:5555")
+    print("Bound ZMQ socket to tcp://*:5555", flush=True)
 
     try:
         t = 0
@@ -35,7 +35,9 @@ def stream_data():
                 "timestamp": float(t),
                 "value": float(value)
             }
+            print(f"Sending data: {data}", flush=True)
             socket.send_string(json.dumps(data))
+            print(f"Data sent successfully", flush=True)
             t += 0.1
             time.sleep(0.01)  # Add a small delay
     except Exception as e:

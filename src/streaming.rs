@@ -36,12 +36,37 @@ impl StreamManager {
         thread::spawn(move || {
             if debug { println!("Starting ZMQ listener thread"); }
             let context = zmq::Context::new();
-            let subscriber = context.socket(zmq::PULL).unwrap();
+            let subscriber = match context.socket(zmq::PULL) {
+                Ok(s) => {
+                    if debug { println!("Successfully created ZMQ PULL socket"); }
+                    s
+                },
+                Err(e) => {
+                    if debug { println!("Failed to create ZMQ socket: {:?}", e); }
+                    return;
+                }
+            };
             
-            if debug { println!("Binding ZMQ socket to tcp://*:5555"); }
-            if let Err(e) = subscriber.bind("tcp://*:5555") {
-                if debug { println!("Failed to bind: {:?}", e); }
+            if debug { println!("Setting ZMQ socket options..."); }
+            
+            // Add a small receive timeout to help with debugging
+            if let Err(e) = subscriber.set_rcvtimeo(100) {
+                if debug { println!("Failed to set receive timeout: {:?}", e); }
             }
+            
+            if debug { println!("Connecting to tcp://localhost:5555"); }
+            
+            if let Err(e) = subscriber.connect("tcp://localhost:5555") {
+                if debug { 
+                    println!("Failed to connect: {:?}", e);
+                    println!("Is the Python script running and binding to port 5555?");
+                }
+                return;
+            } else {
+                if debug { println!("Successfully connected to tcp://localhost:5555"); }
+            }
+            
+            if debug { println!("ZMQ socket setup complete, entering main loop"); }
             
             loop {
                 let is_running = running_clone.lock()
@@ -56,12 +81,16 @@ impl StreamManager {
                     continue;
                 }
 
+                if debug { println!("Attempting to receive ZMQ message..."); }
                 match subscriber.recv_string(zmq::DONTWAIT) {
                     Ok(Ok(msg)) => {
-                        if debug { println!("ZMQ received message: {}", msg); }
+                        if debug { 
+                            println!("ZMQ received raw message: {}", msg);
+                            println!("Message length: {} bytes", msg.len());
+                        }
                         match serde_json::from_str::<StreamData>(&msg) {
                             Ok(data) => {
-                                if debug { println!("Parsed message into data: {:?}", data); }
+                                if debug { println!("Successfully parsed message: {:?}", data); }
                                 if sender_clone.send(data).is_err() {
                                     if debug { println!("Failed to send data through channel"); }
                                     break;
@@ -71,8 +100,10 @@ impl StreamManager {
                         }
                     },
                     Ok(Err(e)) => if debug { println!("Invalid UTF8 in message: {:?}", e); },
-                    Err(e) => if e != zmq::Error::EAGAIN && debug {
-                        println!("ZMQ receive error: {:?}", e);
+                    Err(e) => {
+                        if e != zmq::Error::EAGAIN && debug {
+                            println!("ZMQ receive error: {:?}", e);
+                        }
                     },
                 }
                 std::thread::sleep(std::time::Duration::from_millis(10));
@@ -162,8 +193,12 @@ pub fn update_streams(stream_manager: ResMut<StreamManager>) {
         return;
     }
 
+    if stream_manager.debug {
+        println!("Checking for new stream data...");
+    }
     while let Ok(data) = stream_manager.receiver.try_recv() {
         if stream_manager.debug {
+            println!("Received data: {:?}", data);
             println!("Received new data point - Stream: {}, Time: {}, Value: {}", 
                 data.stream_id, data.timestamp, data.value);
         }
@@ -178,6 +213,8 @@ pub fn update_streams(stream_manager: ResMut<StreamManager>) {
             if stream_manager.debug {
                 println!("Stream {} now has {} points", data.stream_id, points.len());
             }
+        } else if stream_manager.debug {
+            println!("Failed to lock streams HashMap");
         }
     }
 }
