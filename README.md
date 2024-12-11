@@ -21,7 +21,7 @@ source .venv/bin/activate
 
 ### Running Python scripts
 
-Python scripts that connect to your hardware are set in the [scripts.toml)(https://github.com/nominal-io/connect/blob/main/scripts.toml) file:
+Python scripts that connect to your hardware are set in the [scripts.toml](https://github.com/nominal-io/connect/blob/main/scripts.toml) file:
 
 ```toml
 [[scripts]]
