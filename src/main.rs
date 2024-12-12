@@ -19,6 +19,7 @@ use bevy::window::{WindowMode, Window};
 use std::path::{PathBuf, Path};
 use tinyfiledialogs::open_file_dialog;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+use std::io::{BufRead, BufReader};
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum AppSet {
@@ -53,14 +54,6 @@ struct InputFieldConfig {
 
 #[derive(Deserialize, Debug, Default)]
 struct PlotConfig {
-    #[serde(default)]
-    plot_type: String,
-    #[serde(default)]
-    title: String,
-    #[serde(default)]
-    x_label: String,
-    #[serde(default)]
-    y_label: String,
     #[serde(default)]
     tab: String,
 }
@@ -124,7 +117,6 @@ struct LayoutConfig {
     sliders: Vec<SliderConfig>,
 }
 
-fn default_show_3d() -> bool { false }
 fn default_slider_min() -> f32 { -10.0 }
 fn default_slider_max() -> f32 { 10.0 }
 fn default_slider_value() -> f32 { 0.0 }
@@ -176,8 +168,6 @@ struct TabConfig {
     id: String,
     #[serde(default)]
     label: String,
-    #[serde(default)]
-    order: Option<i32>,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -189,7 +179,7 @@ struct DocsConfig {
 }
 
 fn main() {
-    let default_config = PathBuf::from("recipes/1_kitchen_sink/config.toml");
+    let default_config = PathBuf::from("test_apps/1_kitchen_sink/config.toml");
     let content = fs::read_to_string(&default_config).unwrap_or_default();
     let config: Config = toml::from_str(&content).unwrap_or_default();
     
@@ -246,23 +236,19 @@ fn execute_script(
     app_state: &mut AppState,
     script_outputs: &mut ScriptOutputs,
 ) {
-    // Get the directory of the current config file
     let config_dir = app_state.opened_file
         .as_ref()
         .and_then(|p| p.parent())
         .unwrap_or_else(|| Path::new("."));
     
-    // Combine the config directory with the script path
     let script_path = config_dir.join(&script.path);
     println!("Executing script: {} ({})", script.name, script_path.display());
     
-    // Create a simplified state object that includes both input values and slider values
     let simplified_state = serde_json::json!({
         "input_values": &app_state.input_values,
         "slider_values": &app_state.slider_values,
     });
     
-    // Create command with script path
     let mut command = Command::new("python3");
     command.arg(&script_path)
            .stdin(Stdio::piped())
@@ -276,29 +262,34 @@ fn execute_script(
         }
     }
     
-    // Spawn process and handle IO
     if let Ok(mut child) = command.spawn() {
-        // Only write to stdin if we're expecting the script to read it
+        // Write state to stdin if needed
         if !script.functions.is_empty() {
             if let Some(mut stdin) = child.stdin.take() {
                 let _ = stdin.write_all(simplified_state.to_string().as_bytes());
             }
         }
 
-        let output = child.wait_with_output()
-            .map(|output| {
-                if output.status.success() {
-                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                    app_state.script_results.insert(script.name.clone(), stdout.clone());
-                    stdout
-                } else {
-                    String::from_utf8_lossy(&output.stderr).to_string()
+        // Process stdout in real-time
+        if let Some(stdout) = child.stdout.take() {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                if let Ok(output) = line {
+                    let trimmed_output = output.trim().to_string();
+                    
+                    // Create the result key based on whether we're executing a specific function
+                    let result_key = if let Some(func_name) = function_name {
+                        format!("{}_{}", script.name, func_name)
+                    } else {
+                        script.name.clone()
+                    };
+                    app_state.script_results.insert(result_key, trimmed_output.clone());
+                    
+                    println!("Script output: {}", trimmed_output);  // Debug print
+                    script_outputs.results.push(trimmed_output);
                 }
-            })
-            .unwrap_or_else(|e| format!("Error executing script: {}", e));
-        
-        println!("Script output: {}", output);  // Debug print
-        script_outputs.results.push(output);
+            }
+        }
     }
 }
 
@@ -451,7 +442,7 @@ fn egui_system(
                         // Combine the config directory with the script path
                         let script_path = config_dir.join(&script.path);
                         println!("Launching streaming script: {} ({})", script.name, script_path.display());
-                        
+
                         // Pass app state to streaming script
                         let state_json = app_state.to_json();
                         let mut child = Command::new("python3")
@@ -463,12 +454,12 @@ fn egui_system(
                         if let Some(mut stdin) = child.stdin.take() {
                             stdin.write_all(state_json.as_bytes()).expect("Failed to write to stdin");
                         }
-                        
+
                         stream_manager.add_streaming_process(child);
                     }
                 }
             }
-            
+
             // Only show stop streaming button if there are streaming scripts
             if has_streaming_scripts(&config.scripts) {
                 if ui.button("Stop Streaming").clicked() {
@@ -483,54 +474,101 @@ fn egui_system(
         });
 
         egui::Grid::new("scripts_grid")
-            .num_columns(4)
+            .num_columns(6)
             .spacing([40.0, 4.0])
             .striped(true)
             .min_col_width(100.0)
             .show(ui, |ui| {
                 // Add headers with custom widths
+                ui.label("");
                 ui.label("Script");
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
                     ui.set_min_width(200.0);
                     ui.label("Actions");
                 });
                 ui.label("Output");
+                ui.label("Pass/Fail");
                 ui.label("");
                 ui.end_row();
+
+                let mut row_count = 1;
 
                 // Display discrete scripts and their outputs
                 for script in &config.scripts {
                     if script.script_type == "discrete" {
-                        ui.label(&script.path);
-                        
-                        // Function buttons column with wider space
-                        ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
-                            ui.set_min_width(200.0);  // Match header width
-                            ui.vertical(|ui| {
-                                if script.functions.is_empty() {
-                                    if ui.button("Run").clicked() {
-                                        execute_script(&script, None, &mut app_state, &mut script_outputs);
-                                    }
-                                } else {
-                                    for func in &script.functions {
-                                        if ui.button(format!("Run {}", &func.display)).clicked() {
-                                            execute_script(&script, Some(&func.name), &mut app_state, &mut script_outputs);
-                                        }
-                                    }
+                        if script.functions.is_empty() {
+                            // Single row for scripts without functions
+                            ui.label(row_count.to_string());
+                            ui.label(&script.path);
+                            ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
+                                ui.set_min_width(200.0);
+                                if ui.button("Run").clicked() {
+                                    execute_script(&script, None, &mut app_state, &mut script_outputs);
                                 }
                             });
-                        });
+                            let output = app_state.script_results
+                                .get(&script.name)
+                                .map_or("", |s| s.as_str())
+                                .trim();
+                            ui.label(if output.is_empty() { "No output" } else { output });
+                            
+                            // Add pass/fail indicator
+                            if output.to_lowercase() == "pass" {
+                                ui.colored_label(egui::Color32::GREEN, "■");
+                            } else if output.to_lowercase() == "fail" {
+                                ui.colored_label(egui::Color32::RED, "■");
+                            } else if output.to_lowercase() == "neutral" {
+                                ui.colored_label(egui::Color32::YELLOW, "■");                                
+                            } else {
+                                ui.label("");
+                            }
+                            
+                            ui.label("");
+                            ui.end_row();
+                            row_count += 1;
+                        } else {
+                            // Multiple rows for scripts with functions
+                            for (idx, func) in script.functions.iter().enumerate() {
+                                ui.label(row_count.to_string());
+                                if idx == 0 {
+                                    ui.label(&script.path);
+                                } else {
+                                    ui.label("");
+                                }
+                                
+                                ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
+                                    ui.set_min_width(200.0);
+                                    if ui.button(&func.display).clicked() {
+                                        execute_script(&script, Some(&func.name), &mut app_state, &mut script_outputs);
+                                    }
+                                });
 
-                        let output = app_state.script_results
-                            .get(&script.name)
-                            .map_or("", |s| s.as_str())
-                            .trim();
-                        ui.label(if output.is_empty() { "No output" } else { output });
-                        ui.label("");
-                        ui.end_row();
+                                let output_key = format!("{}_{}", script.name, func.name);
+                                let output = app_state.script_results
+                                    .get(&output_key)
+                                    .map_or("", |s| s.as_str())
+                                    .trim();
+                                ui.label(if output.is_empty() { "No output" } else { output });
+                                
+                                // Add pass/fail indicator
+                                if output.to_lowercase() == "pass" {
+                                    ui.colored_label(egui::Color32::GREEN, "■");
+                                } else if output.to_lowercase() == "fail" {
+                                    ui.colored_label(egui::Color32::RED, "■");
+                                } else if output.to_lowercase() == "neutral" {
+                                    ui.colored_label(egui::Color32::YELLOW, "■");                                
+                                } else {
+                                    ui.label("");
+                                }
+                                
+                                ui.label("");
+                                ui.end_row();
+                                row_count += 1;
+                            }
+                        }
                     }
                 }
-                
+
                 // Only show streaming scripts section if there are streaming scripts
                 if has_streaming_scripts(&config.scripts) {
                     ui.label("Streaming Scripts");
@@ -541,7 +579,7 @@ fn egui_system(
                     ui.label("");
                     ui.label("");
                     ui.end_row();
-                    
+
                     for script in &config.scripts {
                         if script.script_type == "streaming" {
                             ui.label(&script.path);
