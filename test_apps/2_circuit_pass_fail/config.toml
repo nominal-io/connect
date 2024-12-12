@@ -1,0 +1,41 @@
+# Debug settings
+[debug]
+streaming = false
+
+# App layout
+[layout]
+show_3d_scene = false
+title = "Circuit board pass / fail"
+
+# Right panel configuration
+[layout.right_panel]
+enabled = true
+default_width = 1.0  # Fraction of window width
+
+# Define available tabs
+[[layout.right_panel.tabs]]
+id = "docs"
+label = "Instructions"
+
+# Documentation configuration
+[layout.docs]
+path = "instructions.md"
+tab = "docs"  # Assign to first tab
+
+[[scripts]]
+name = "Pass / Fail"
+path = "circuit_pass_fail.py"
+type = "discrete"
+functions = [
+    { name = "power_up", display = "Power Up" },
+    { name = "run_jtag", display = "Run JTAG" },
+    { name = "pogo_pin_circuit_1", display = "Pogo Pin Circuit 1" },
+    { name = "pogo_pin_circuit_2", display = "Pogo Pin Circuit 2" },
+    { name = "pogo_pin_circuit_3", display = "Pogo Pin Circuit 3" },
+    { name = "pogo_pin_circuit_4", display = "Pogo Pin Circuit 4" },
+    { name = "pogo_pin_circuit_5", display = "Pogo Pin Circuit 5" },
+    { name = "pogo_pin_circuit_6", display = "Pogo Pin Circuit 6" },
+    { name = "pogo_pin_circuit_7", display = "Pogo Pin Circuit 7" },
+    { name = "pogo_pin_circuit_8", display = "Pogo Pin Circuit 8" },
+    { name = "power_down", display = "Power Down" },            
+]

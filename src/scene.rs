@@ -38,6 +38,7 @@ pub fn setup(
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(90.0, 0.2, 90.0))),
         MeshMaterial3d(floor_material),
+        Name::new("Floor"),
     ));
 
     /*
