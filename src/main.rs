@@ -1,182 +1,27 @@
 mod streaming;
 mod camera;
 mod scene;
+mod types;
 
 use streaming::{StreamManager, update_streams};
 use camera::orbit_camera;
 use scene::setup;
+use types::*;
 
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use egui_plot::{Line, Plot, PlotPoints};
-use std::collections::HashMap;
 use std::process::{Command, Stdio};
-use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use serde_json;
 use bevy::window::{WindowMode, Window};
 use std::path::{PathBuf, Path};
 use tinyfiledialogs::open_file_dialog;
-use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+use egui_commonmark::CommonMarkViewer;
 use std::io::{BufRead, BufReader};
-
-#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
-pub enum AppSet {
-    Main,
-}
-
-#[derive(Deserialize, Debug)]
-struct FunctionConfig {
-    name: String,      // Function name in the Python script
-    display: String,   // Display name in the UI
-}
-
-#[derive(Deserialize, Debug)]
-struct ScriptConfig {
-    name: String,
-    path: String,
-    #[serde(rename = "type")]
-    script_type: String,
-    #[serde(default)]
-    functions: Vec<FunctionConfig>,
-}
-
-#[derive(Deserialize, Debug, Default)]
-struct InputFieldConfig {
-    #[serde(default)]
-    id: String,
-    #[serde(default)]
-    label: String,
-    #[serde(default)]
-    tab: String,
-}
-
-#[derive(Deserialize, Debug, Default)]
-struct PlotConfig {
-    #[serde(default)]
-    tab: String,
-}
-
-#[derive(Deserialize, Debug)]
-struct SliderConfig {
-    id: String,
-    label: String,
-    min: f32,
-    max: f32,
-    default: f32,
-    tab: String,
-}
-
-impl Default for SliderConfig {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            label: String::new(),
-            min: default_slider_min(),
-            max: default_slider_max(),
-            default: default_slider_value(),
-            tab: String::new(),
-        }
-    }
-}
-
-// Add back the DebugConfig struct
-#[derive(Deserialize, Debug, Default)]
-struct DebugConfig {
-    #[serde(default)]
-    streaming: bool,
-}
-
-// The rest of the Config and LayoutConfig structs remain the same
-#[derive(Deserialize, Debug, Default)]
-struct Config {
-    #[serde(default)]
-    layout: LayoutConfig,
-    #[serde(default)]
-    debug: DebugConfig,
-    #[serde(default)]
-    scripts: Vec<ScriptConfig>,
-}
-
-#[derive(Deserialize, Debug, Default)]
-struct LayoutConfig {
-    #[serde(default)]
-    show_3d_scene: bool,
-    title: Option<String>,
-    logo_path: Option<String>,
-    #[serde(default)]
-    right_panel: RightPanelConfig,
-    #[serde(default)]
-    docs: DocsConfig,
-    #[serde(default)]
-    plot: PlotConfig,
-    #[serde(default)]
-    input_fields: Vec<InputFieldConfig>,
-    #[serde(default)]
-    sliders: Vec<SliderConfig>,
-}
-
-fn default_slider_min() -> f32 { -10.0 }
-fn default_slider_max() -> f32 { 10.0 }
-fn default_slider_value() -> f32 { 0.0 }
-
-#[derive(Resource, Default, Debug, Serialize)]
-struct AppState {
-    input_values: HashMap<String, String>,
-    script_results: HashMap<String, String>,
-    slider_values: HashMap<String, f32>,
-    opened_file: Option<PathBuf>,
-}
-
-impl AppState {
-    fn to_json(&self) -> String {
-        serde_json::to_string(&self).unwrap_or_default()
-    }
-}
-
-#[derive(Resource, Default)]
-struct ScriptOutputs {
-    results: Vec<String>,
-}
-
-#[derive(Resource, Default)]
-struct MarkdownCache {
-    cache: CommonMarkCache,
-}
-
-#[derive(Resource, Default)]
-struct UiState {
-    selected_tab: String,
-}
-
-#[derive(Deserialize, Debug, Default)]
-struct RightPanelConfig {
-    #[serde(default)]
-    enabled: bool,
-    #[serde(default = "default_panel_width")]
-    default_width: f32,
-    #[serde(default)]
-    tabs: Vec<TabConfig>,
-}
-
-fn default_panel_width() -> f32 { 0.3 }
-
-#[derive(Deserialize, Debug, Default)]
-struct TabConfig {
-    #[serde(default)]
-    id: String,
-    #[serde(default)]
-    label: String,
-}
-
-#[derive(Deserialize, Debug, Default)]
-struct DocsConfig {
-    #[serde(default)]
-    path: String,
-    #[serde(default)]
-    tab: String,
-}
+use std::time::{Instant, Duration};
+use egui_extras::{TableBuilder, Column};
 
 fn main() {
     let default_config = PathBuf::from("test_apps/1_kitchen_sink/config.toml");
@@ -270,25 +115,71 @@ fn execute_script(
             }
         }
 
-        // Process stdout in real-time
+        // Create a thread to handle stderr in real-time
+        if let Some(stderr) = child.stderr.take() {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                if let Ok(error_line) = line {
+                    eprintln!("Script stderr: {}", error_line);
+                }
+            }
+        }
+
+        // Process stdout
         if let Some(stdout) = child.stdout.take() {
             let reader = BufReader::new(stdout);
             for line in reader.lines() {
                 if let Ok(output) = line {
                     let trimmed_output = output.trim().to_string();
+                    println!("Script output: {}", trimmed_output);
                     
-                    // Create the result key based on whether we're executing a specific function
                     let result_key = if let Some(func_name) = function_name {
                         format!("{}_{}", script.name, func_name)
                     } else {
                         script.name.clone()
                     };
-                    app_state.script_results.insert(result_key, trimmed_output.clone());
+
+                    println!("Attempting to parse as table data for key: {}", result_key);
                     
-                    println!("Script output: {}", trimmed_output);  // Debug print
+                    match serde_json::from_str::<TableData>(&trimmed_output) {
+                        Ok(mut table_data) => {
+                            println!("Successfully parsed table data: {} columns, {} rows", 
+                                table_data.columns.len(), 
+                                table_data.data.len()
+                            );
+                            
+                            // Store error message if present before moving table_data
+                            let has_error = table_data.error.is_some();
+                            if let Some(error) = table_data.error.take() {
+                                println!("Table data contained error: {}", error);
+                                app_state.script_results.insert(result_key.clone(), error);
+                            }
+                            
+                            // Only store table data if there was no error
+                            if !has_error {
+                                app_state.script_tables.insert(result_key, table_data);
+                                println!("Stored table data");
+                            }
+                        },
+                        Err(e) => {
+                            println!("Failed to parse as table data: {}", e);
+                            app_state.script_results.insert(result_key, trimmed_output.clone());
+                        }
+                    }
+                    
                     script_outputs.results.push(trimmed_output);
                 }
             }
+        }
+
+        // Wait for the process to complete
+        match child.wait() {
+            Ok(status) => {
+                if !status.success() {
+                    println!("Script failed with status: {}", status);
+                }
+            },
+            Err(e) => println!("Failed to wait for script: {}", e),
         }
     }
 }
@@ -609,92 +500,200 @@ fn egui_system(
                     }
                 });
 
-            ui.separator();
+                ui.separator();
 
                 // Tab Content
                 match ui_state.selected_tab.as_str() {
-                    tab_id => {
-                        // Documentation
-                        if config.layout.docs.tab == tab_id {
-                            if let Some(opened_file) = &app_state.opened_file {
-                                let full_docs_path = opened_file.parent()
-                                    .unwrap_or_else(|| Path::new(""))
-                                    .join(&config.layout.docs.path);
+                    "table_view" => {
+                        let now = Instant::now();
+                        let debug_interval = Duration::from_secs(1);
+                        
+                        ui.push_id("table_view_container", |ui| {
+                            // Check if we should print the overall debug message
+                            let should_debug = app_state.table_display_state.last_debug
+                                .map_or(true, |last| now.duration_since(last) > debug_interval);
                                 
-                                match fs::read_to_string(&full_docs_path) {
-                                    Ok(content) => {
-                                        egui::ScrollArea::vertical().show(ui, |ui| {
-                                            CommonMarkViewer::new()
-                                                .show(ui, &mut markdown_cache.cache, &content);
-                                        });
-                                    },
-                                    Err(e) => {
-                                        ui.label(format!("Could not load documentation: {}", e));
-                                    }
-                                }
+                            if should_debug {
+                                println!("Table view tab selected. Tables count: {}", app_state.script_tables.len());
+                                app_state.table_display_state.last_debug = Some(now);
                             }
-                        }
 
-                        // Plot
-                        if config.layout.plot.tab == tab_id {
-                            let plot = Plot::new("streaming_plot")
-                                .view_aspect(2.0);
-                            plot.show(ui, |plot_ui| {
-                                if has_streaming_scripts(&config.scripts) {
-                                    if let Ok(streams) = stream_manager.as_ref().streams.lock() {
-                                        for (stream_id, points) in streams.iter() {
-                                            if !points.is_empty() {
-                                                let line = Line::new(PlotPoints::new(points.clone()))
-                                                    .name(stream_id)
-                                                    .width(2.0);
-                                                plot_ui.line(line);
+                            if app_state.script_tables.is_empty() {
+                                ui.push_id("empty_table_message", |ui| {
+                                    ui.label("No table data available");
+                                });
+                            } else {
+                                egui::ScrollArea::vertical()
+                                    .id_salt("table_scroll_area")
+                                    .show(ui, |ui| {
+                                        // Collect tables that need debug messages
+                                        let debug_tables: Vec<_> = app_state.script_tables
+                                            .iter()
+                                            .filter(|(script_name, _)| {
+                                                app_state.table_display_state.table_debugs
+                                                    .get(*script_name)
+                                                    .map_or(true, |&last| now.duration_since(last) > debug_interval)
+                                            })
+                                            .map(|(name, data)| (name.clone(), data.columns.len(), data.data.len()))
+                                            .collect();
+
+                                        // Print debug messages
+                                        for (script_name, cols, rows) in &debug_tables {
+                                            println!("Displaying table for {}: {} columns, {} rows", 
+                                                script_name, cols, rows);
+                                            app_state.table_display_state.table_debugs
+                                                .insert(script_name.clone(), now);
+                                        }
+
+                                        // Render tables
+                                        for (script_name, table_data) in &app_state.script_tables {
+                                            ui.push_id(format!("table_container_{}", script_name), |ui| {
+                                                ui.push_id(format!("table_heading_{}", script_name), |ui| {
+                                                    ui.heading(script_name);
+                                                });
+                                                
+                                                ui.push_id(format!("table_grid_{}", script_name), |ui| {
+                                                    TableBuilder::new(ui)
+                                                        .striped(true)
+                                                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                                                        .columns(Column::auto().at_least(80.0).resizable(true), table_data.columns.len())
+                                                        .header(30.0, |mut header| {
+                                                            for (col_idx, col_name) in table_data.columns.iter().enumerate() {
+                                                                header.col(|ui| {
+                                                                    ui.push_id(format!("header_{}_{}", script_name, col_idx), |ui| {
+                                                                        ui.strong(col_name);
+                                                                    });
+                                                                });
+                                                            }
+                                                        })
+                                                        .body(|mut body| {
+                                                            for (row_idx, row_data) in table_data.data.iter().enumerate() {
+                                                                body.row(25.0, |mut row| {
+                                                                    for (col_idx, cell) in row_data.iter().enumerate() {
+                                                                        row.col(|ui| {
+                                                                            ui.push_id(format!("cell_{}_{}_{}", script_name, row_idx, col_idx), |ui| {
+                                                                                ui.label(cell);
+                                                                            });
+                                                                        });
+                                                                    }
+                                                                });
+                                                            }
+                                                        });
+                                                });
+
+                                                ui.push_id(format!("table_spacing_{}", script_name), |ui| {
+                                                    ui.add_space(20.0);
+                                                });
+                                            });
+                                        }
+                                    });
+                            }
+                        });
+                    },
+                    tab_id => {
+                        ui.push_id(format!("tab_content_{}", tab_id), |ui| {
+                            // If this tab has a plot configured for it, show the plot
+                            if config.layout.plot.tab == tab_id {
+                                ui.push_id("plot_container", |ui| {
+                                    let plot = Plot::new("streaming_plot")
+                                        .view_aspect(2.0);
+                                    plot.show(ui, |plot_ui| {
+                                        if has_streaming_scripts(&config.scripts) {
+                                            if let Ok(streams) = stream_manager.as_ref().streams.lock() {
+                                                for (stream_id, points) in streams.iter() {
+                                                    if !points.is_empty() {
+                                                        let line = Line::new(PlotPoints::new(points.clone()))
+                                                            .name(stream_id)
+                                                            .width(2.0);
+                                                        plot_ui.line(line);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    });
+                                });
+                                
+                                // Add some spacing after the plot
+                                ui.add_space(20.0);
+                            }
+
+                            // If this tab has documentation configured for it, show the docs
+                            if config.layout.docs.tab == tab_id {
+                                ui.push_id("instructions_container", |ui| {
+                                    if let Some(opened_file) = &app_state.opened_file {
+                                        let full_docs_path = opened_file.parent()
+                                            .unwrap_or_else(|| Path::new(""))
+                                            .join(&config.layout.docs.path);
+                                        
+                                        match fs::read_to_string(&full_docs_path) {
+                                            Ok(content) => {
+                                                egui::ScrollArea::vertical()
+                                                    .id_salt("instructions_scroll")
+                                                    .show(ui, |ui| {
+                                                        CommonMarkViewer::new()
+                                                            .show(ui, &mut markdown_cache.cache, &content);
+                                                    });
+                                            },
+                                            Err(e) => {
+                                                ui.label(format!("Could not load documentation: {}", e));
                                             }
                                         }
                                     }
-                                }
-                            });
-                        }
+                                });
+                            }
 
-                        // Input Fields
-                        let tab_input_fields: Vec<_> = config.layout.input_fields.iter()
-                            .filter(|field| field.tab == tab_id)
-                            .collect();
-                        
-                        if !tab_input_fields.is_empty() {
-                            ui.vertical(|ui| {
-                                for field in tab_input_fields {
-                                    ui.horizontal(|ui| {
-                                        ui.label(&field.label);
-                                        let value = app_state.input_values
-                                            .entry(field.id.clone())
-                                            .or_insert_with(String::new);
-                                        ui.text_edit_singleline(value);
+                            // Show input fields for this tab
+                            let tab_input_fields: Vec<_> = config.layout.input_fields.iter()
+                                .filter(|field| field.tab == tab_id)
+                                .collect();
+                            
+                            if !tab_input_fields.is_empty() {
+                                ui.push_id("input_fields_section", |ui| {
+                                    ui.vertical(|ui| {
+                                        for field in tab_input_fields {
+                                            ui.push_id(&field.id, |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.label(&field.label);
+                                                    let value = app_state.input_values
+                                                        .entry(field.id.clone())
+                                                        .or_insert_with(String::new);
+                                                    ui.text_edit_singleline(value);
+                                                });
+                                            });
+                                        }
                                     });
-                                }
-                            });
-                        }
+                                });
+                                
+                                // Add some spacing after input fields
+                                ui.add_space(10.0);
+                            }
 
-                        // Sliders
-                        let tab_sliders: Vec<_> = config.layout.sliders.iter()
-                            .filter(|slider| slider.tab == tab_id)
-                            .collect();
-                        
-                        if !tab_sliders.is_empty() {
-                            ui.vertical(|ui| {
-                                for slider in tab_sliders {
-                                    ui.horizontal(|ui| {
-                                        ui.label(&slider.label);
-                                        let value = app_state.slider_values
-                                            .entry(slider.id.clone())
-                                            .or_insert(slider.default);
-                                        let _ = ui.add(egui::Slider::new(
-                                            value, 
-                                            slider.min..=slider.max
-                                        ));
+                            // Show sliders for this tab
+                            let tab_sliders: Vec<_> = config.layout.sliders.iter()
+                                .filter(|slider| slider.tab == tab_id)
+                                .collect();
+                            
+                            if !tab_sliders.is_empty() {
+                                ui.push_id("sliders_section", |ui| {
+                                    ui.vertical(|ui| {
+                                        for slider in tab_sliders {
+                                            ui.push_id(&slider.id, |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.label(&slider.label);
+                                                    let value = app_state.slider_values
+                                                        .entry(slider.id.clone())
+                                                        .or_insert(slider.default);
+                                                    let _ = ui.add(egui::Slider::new(
+                                                        value, 
+                                                        slider.min..=slider.max
+                                                    ));
+                                                });
+                                            });
+                                        }
                                     });
-                                }
-                            });
-                        }
+                                });
+                            }
+                        });
                     }
                 }
             });

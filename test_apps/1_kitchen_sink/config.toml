@@ -63,6 +63,38 @@ max = 5.0
 default = 0.0
 tab = "controls"  # Assign to second tab
 
+[[layout.input_fields]]
+id = "csv_path"
+label = "CSV File Path"
+tab = "controls"
+
+# Add a new tab for the table
+[[layout.right_panel.tabs]]
+id = "table_view"
+label = "Table View"
+
+# Table configuration
+[layout.table]
+tab = "table_view"  # Link to the tab where the table should appear
+columns = [
+    "ID",
+    "Status",
+    "Value",
+    "Timestamp"
+]
+data = [
+    ["001", "Active", "23.5", "2024-03-20 10:00"],
+    ["002", "Inactive", "15.7", "2024-03-20 10:01"],
+    ["003", "Active", "42.1", "2024-03-20 10:02"]
+]
+
+# Optional table styling (for future expansion)
+[layout.table.style]
+striped = true
+borders = true
+header_background = "#404040"
+row_height = 30
+
 # Python scripts
 
 [[scripts]]
@@ -83,3 +115,8 @@ functions = [
     { name = "echo_one", display = "Field 1" },
     { name = "echo_two", display = "Field 2" }
 ]
+
+[[scripts]]
+name = "Read CSV"
+path = "read_csv.py"
+type = "discrete"
