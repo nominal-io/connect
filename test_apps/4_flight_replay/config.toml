@@ -1,0 +1,76 @@
+# Debug settings
+[debug]
+streaming = true
+
+# App layout
+[layout]
+show_3d_scene = true
+title = "Connect"
+logo_path = "assets/logo.png"
+
+# Left panel configuration (new section)
+[layout.left_panel]
+enabled = true
+default_width = 0.3  # Fraction of window width
+
+[[layout.left_panel.tabs]]
+id = "docs"
+label = "Instructions"
+
+# Right panel configuration
+[layout.right_panel]
+enabled = true
+default_width = 0.5  # Fraction of window width
+
+[[layout.right_panel.tabs]]
+id = "controls"
+label = "Controls"
+
+# Plot configuration
+[layout.plot]
+type = "line"
+title = "Streaming Data Plot"
+x_label = "Time (s)"
+y_label = "Value"
+tab = "controls"  # Assign to second tab
+
+# Input fields configuration
+[[layout.input_fields]]
+id = "filter"
+label = "Filter Expression"
+tab = "controls"  # Assign to second tab
+
+[[layout.input_fields]]
+id = "threshold"
+label = "Threshold Value"
+tab = "controls"  # Assign to second tab
+
+# Slider configuration
+[[layout.sliders]]
+id = "frequency"
+label = "Frequency"
+min = 0.0
+max = 10.0
+default = 1.0
+tab = "controls"  # Assign to second tab
+
+[[layout.sliders]]
+id = "y_axis_offset"
+label = "Offset"
+min = -5.0
+max = 5.0
+default = 0.0
+tab = "controls"  # Assign to second tab
+
+[[layout.input_fields]]
+id = "csv_path"
+label = "CSV File Path"
+tab = "controls"
+
+# Python scripts
+
+[[scripts]]
+name = "Flight Replay"
+path = "flight_replay.py"
+type = "streaming3d"
+

@@ -1,4 +1,4 @@
-use std::process::{Child};
+use std::process::Child;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use crossbeam_channel::{bounded, Receiver, Sender};
