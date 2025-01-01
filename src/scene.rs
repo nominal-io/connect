@@ -5,11 +5,11 @@ use bevy::{
 };
 use crate::camera::OrbitCamera;
 
-pub fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+fn create_scene(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
     // Set background color to black
     commands.insert_resource(ClearColor(Color::BLACK));
@@ -41,14 +41,6 @@ pub fn setup(
         Name::new("Floor"),
     ));
 
-    /*
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 2.0))),
-        MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
-        Transform::from_xyz(-0.0, 0.0, -0.0),
-    ));
-    */
-
     // light
     commands.spawn((
         PointLight {
@@ -65,4 +57,22 @@ pub fn setup(
         Transform::from_xyz(-40.0, 40.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
         OrbitCamera::default(),
     ));
+}
+
+pub fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    create_scene(&mut commands, &asset_server, &mut meshes, &mut materials);
+}
+
+pub fn manual_setup(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+) {
+    create_scene(commands, asset_server, meshes, materials);
 }
