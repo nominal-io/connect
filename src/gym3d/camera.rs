@@ -22,6 +22,16 @@ impl OrbitCamera {
     }
 
     #[allow(dead_code)]
+    pub fn new_isometric() -> Self {
+        Self {
+            focus: Vec3::ZERO,
+            radius: 50.0,
+            min_radius: 2.0,
+            max_radius: 100.0,
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn reset_to_home(&mut self, transform: &mut Transform) {
         self.focus = Vec3::ZERO;
         self.radius = 10.0;
@@ -120,6 +130,23 @@ pub fn orbit_camera(
         }
 
         // Always look at focus point
+        transform.look_at(orbit.focus, Vec3::Y);
+    }
+}
+
+pub fn setup_isometric_camera(
+    mut query: Query<(&mut Transform, &OrbitCamera), Added<OrbitCamera>>,
+) {
+    for (mut transform, orbit) in query.iter_mut() {
+        let distance = orbit.radius;
+        let angle = std::f32::consts::PI / 4.0; // 45 degrees
+        let height = distance * 0.5; // Camera height = 50% of distance
+        
+        transform.translation = Vec3::new(
+            distance * angle.cos(),
+            height,
+            distance * angle.sin(),
+        );
         transform.look_at(orbit.focus, Vec3::Y);
     }
 }

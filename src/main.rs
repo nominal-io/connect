@@ -1,13 +1,14 @@
 mod executors;
-mod camera;
-mod scene;
+mod gym3d;
 mod types;
 mod panels;
 
 use executors::streaming::{StreamManager, update_streams};
 use executors::discrete::execute_script;
-use camera::orbit_camera;
-use scene::setup;
+use gym3d::camera::orbit_camera;
+use gym3d::scene::initialize_scene_with_camera;
+use gym3d::scene::InfiniteGridMaterial;
+use gym3d::scene::update_infinite_plane;
 use types::*;
 
 use bevy::prelude::*;
@@ -16,6 +17,7 @@ use std::fs;
 use bevy::window::{WindowMode, Window};
 use std::path::PathBuf;
 use crate::panels::side_panels::show_right_panel;
+use crate::gym3d::camera::setup_isometric_camera;
 
 fn main() {
     let default_config = PathBuf::from("test_apps/1_kitchen_sink/config.toml");
@@ -41,9 +43,11 @@ fn main() {
             }),
             ..default()
         }))
-        .add_systems(Startup, setup)
+        .add_systems(Startup, initialize_scene_with_camera)
         .add_systems(Update, (
             orbit_camera,
+            setup_isometric_camera,
+            update_infinite_plane,
         ).in_set(AppSet::Main));
     } else {
         // Use a minimal set of plugins when 3D scene is disabled
@@ -61,6 +65,7 @@ fn main() {
             selected_tab: initial_tab,
         })
         .insert_resource(MarkdownCache::default())
+        .add_plugins(MaterialPlugin::<InfiniteGridMaterial>::default())
         .configure_sets(Update, AppSet::Main);
 
     app.add_systems(Update, (
