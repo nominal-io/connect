@@ -49,7 +49,7 @@ fn main() {
                 })
                 .set(LogPlugin {
                     filter: format!(
-                        "connect={}",
+                        "connect::executors::streaming={}",
                         if config.debug.streaming {
                             "debug"
                         } else {
