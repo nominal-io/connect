@@ -3,6 +3,7 @@ mod gym3d;
 mod panels;
 mod types;
 
+use bevy::log::LogPlugin;
 use bevy::prelude::*;
 use bevy::window::{Window, WindowMode};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
@@ -36,14 +37,29 @@ fn main() {
 
     // Configure default plugins based on whether 3D scene is enabled
     if config.layout.show_3d_scene {
-        app.add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: config.layout.title.unwrap_or("Connect".to_string()),
-                mode: WindowMode::Windowed,
-                ..default()
-            }),
-            ..default()
-        }))
+        app.add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: config.layout.title.unwrap_or("Connect".to_string()),
+                        mode: WindowMode::Windowed,
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(LogPlugin {
+                    filter: format!(
+                        "connect={}",
+                        if config.debug.streaming {
+                            "debug"
+                        } else {
+                            "info"
+                        }
+                    ),
+                    level: bevy::log::Level::INFO,
+                    ..default()
+                }),
+        )
         .add_systems(Startup, initialize_scene_with_camera)
         .add_systems(
             Update,

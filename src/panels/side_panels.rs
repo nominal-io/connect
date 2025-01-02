@@ -1,3 +1,4 @@
+use bevy::log::*;
 use bevy_egui::egui;
 use egui_commonmark::CommonMarkViewer;
 use egui_extras::{Column, TableBuilder};
@@ -128,7 +129,7 @@ fn show_table_view(ui: &mut egui::Ui, app_state: &mut AppState) {
             now,
             debug_interval,
         ) {
-            println!(
+            debug!(
                 "Table view tab selected. Tables count: {}",
                 app_state.script_tables.len()
             );
@@ -189,7 +190,7 @@ fn debug_tables(app_state: &mut AppState, now: Instant, debug_interval: Duration
         .collect();
 
     for (script_name, cols, rows) in debug_tables {
-        println!(
+        debug!(
             "Displaying table for {}: {} columns, {} rows",
             script_name, cols, rows
         );
@@ -379,10 +380,7 @@ fn show_input_fields(ui: &mut egui::Ui, tab_id: &str, app_state: &mut AppState, 
                     ui.push_id(&field.id, |ui| {
                         ui.horizontal(|ui| {
                             ui.label(&field.label);
-                            let value = app_state
-                                .input_values
-                                .entry(field.id.clone())
-                                .or_default();
+                            let value = app_state.input_values.entry(field.id.clone()).or_default();
                             ui.text_edit_singleline(value);
                         });
                     });

@@ -87,7 +87,7 @@ fn create_scene(
     standard_materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
     // Debug prints
-    println!("Creating scene...");
+    debug!("Creating scene...");
 
     // Set background color to black
     commands.insert_resource(ClearColor(Color::BLACK));
@@ -97,10 +97,10 @@ fn create_scene(
         line_width: 0.05,
         view: unsafe { std::mem::zeroed() },
     });
-    println!("Material created: {:?}", floor_material);
+    debug!("Material created: {:?}", floor_material);
 
     let mesh = meshes.add(Plane3d::default().mesh().size(1000.0, 1000.0));
-    println!("Mesh created: {:?}", mesh);
+    debug!("Mesh created: {:?}", mesh);
 
     // Spawn closer to camera
     commands.spawn((

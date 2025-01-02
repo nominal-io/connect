@@ -98,14 +98,14 @@ fn handle_file_selection(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
-    println!("Selected file: {}", path_str);
+    debug!("Selected file: {}", path_str);
     let new_path = PathBuf::from(path_str);
 
     match fs::read_to_string(&new_path) {
         Ok(new_content) => {
             match toml::from_str::<Config>(&new_content) {
                 Ok(new_config) => {
-                    println!("Config loaded successfully: {:?}", new_config);
+                    info!("Config loaded successfully: {:?}", new_config);
 
                     // Clear existing state
                     app_state.input_values.clear();
@@ -137,10 +137,10 @@ fn handle_file_selection(
                         ui_state.right_selected_tab = first_tab.id.clone();
                     }
                 }
-                Err(e) => println!("Failed to parse config: {}", e),
+                Err(e) => error!("Failed to parse config: {}", e),
             }
         }
-        Err(e) => println!("Failed to read file: {}", e),
+        Err(e) => error!("Failed to read file: {}", e),
     }
 }
 
@@ -173,7 +173,6 @@ fn handle_execute_all(
     stream_manager: &mut StreamManager,
     config: &Config,
 ) {
-    println!("Button clicked!");
     script_outputs.results.clear();
 
     if has_streaming_scripts(&config.scripts) {
@@ -184,7 +183,7 @@ fn handle_execute_all(
         match script.script_type.as_str() {
             "discrete" => handle_discrete_script(script, app_state, script_outputs),
             "streaming" => handle_streaming_script(script, app_state, stream_manager),
-            _ => println!("Unknown script type: {}", script.script_type),
+            _ => error!("Unknown script type: {}", script.script_type),
         }
     }
 }
@@ -217,7 +216,7 @@ fn handle_streaming_script(
         .unwrap_or_else(|| Path::new("."));
 
     let script_path = config_dir.join(&script.path);
-    println!(
+    info!(
         "Launching streaming script: {} ({})",
         script.name,
         script_path.display()
