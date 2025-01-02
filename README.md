@@ -21,7 +21,7 @@ source .venv/bin/activate
 
 ### Running Python scripts
 
-Python scripts that connect to your hardware are set in a config.toml file:
+Python scripts that connect to your hardware are set in a [config.toml](https://github.com/nominal-io/connect/blob/main/test_apps/1_kitchen_sink/config.toml) file. See the [test_apps](https://github.com/nominal-io/connect/tree/main/test_apps) folder for various config files and usage demos. 
 
 ```toml
 [[scripts]]
