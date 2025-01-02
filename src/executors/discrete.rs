@@ -1,4 +1,5 @@
 use crate::types::*;
+use bevy::log::*;
 use serde_json;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -17,7 +18,7 @@ pub fn execute_script(
         .unwrap_or_else(|| Path::new("."));
 
     let script_path = config_dir.join(&script.path);
-    println!(
+    info!(
         "Executing script: {} ({})",
         script.name,
         script_path.display()
@@ -50,7 +51,7 @@ fn spawn_and_run_script(
 
     if let Some(func_name) = function_name {
         if !script.functions.is_empty() {
-            println!("Executing function '{}' in script", func_name);
+            info!("Executing function '{}' in script", func_name);
             command.arg("--function").arg(func_name);
         }
     }
@@ -69,7 +70,7 @@ fn spawn_and_run_script(
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
             if let Ok(error_line) = line {
-                eprintln!("Script stderr: {}", error_line);
+                warn!("Script stderr: {}", error_line);
             }
         }
     }
@@ -88,11 +89,11 @@ fn spawn_and_run_script(
     // Wait for completion
     match child.wait() {
         Ok(status) if !status.success() => {
-            println!("Script failed with status: {}", status);
+            warn!("Script failed with status: {}", status);
             None
         }
         Err(e) => {
-            println!("Failed to wait for script: {}", e);
+            warn!("Failed to wait for script: {}", e);
             None
         }
         Ok(_) => Some(output),
@@ -106,7 +107,7 @@ fn process_script_output(
     app_state: &mut AppState,
     script_outputs: &mut ScriptOutputs,
 ) {
-    println!("Script output: {}", output);
+    debug!("Script output: {}", output);
 
     let result_key = if let Some(func_name) = function_name {
         format!("{}_{}", script.name, func_name)
@@ -114,11 +115,11 @@ fn process_script_output(
         script.name.clone()
     };
 
-    println!("Attempting to parse as table data for key: {}", result_key);
+    debug!("Attempting to parse as table data for key: {}", result_key);
 
     match serde_json::from_str::<TableData>(&output) {
         Ok(mut table_data) => {
-            println!(
+            info!(
                 "Successfully parsed table data: {} columns, {} rows",
                 table_data.columns.len(),
                 table_data.data.len()
@@ -127,18 +128,18 @@ fn process_script_output(
             // Handle error if present
             let has_error = table_data.error.is_some();
             if let Some(error) = table_data.error.take() {
-                println!("Table data contained error: {}", error);
+                warn!("Table data contained error: {}", error);
                 app_state.script_results.insert(result_key.clone(), error);
             }
 
             // Store table data if no error
             if !has_error {
                 app_state.script_tables.insert(result_key, table_data);
-                println!("Stored table data");
+                warn!("Stored table data");
             }
         }
         Err(e) => {
-            println!("Failed to parse as table data: {}", e);
+            warn!("Failed to parse as table data: {}", e);
             app_state.script_results.insert(result_key, output.clone());
         }
     }

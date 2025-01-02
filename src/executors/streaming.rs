@@ -74,62 +74,44 @@ impl StreamManager {
 
         // Spawn ZMQ listener thread
         thread::spawn(move || {
-            if debug {
-                println!("Starting ZMQ listener thread");
-            }
+            debug!("Starting ZMQ listener thread");
             let context = zmq::Context::new();
             let subscriber = match context.socket(zmq::PULL) {
                 Ok(s) => {
-                    if debug {
-                        println!("Successfully created ZMQ PULL socket");
-                    }
+                    debug!("Successfully created ZMQ PULL socket");
                     s
                 }
                 Err(e) => {
-                    if debug {
-                        println!("Failed to create ZMQ socket: {:?}", e);
-                    }
+                    debug!("Failed to create ZMQ socket: {:?}", e);
                     return;
                 }
             };
 
-            if debug {
-                println!("Setting ZMQ socket options...");
-            }
+            debug!("Setting ZMQ socket options...");
 
             // Add a small receive timeout to help with debugging
             if let Err(e) = subscriber.set_rcvtimeo(100) {
-                if debug {
-                    println!("Failed to set receive timeout: {:?}", e);
-                }
+                debug!("Failed to set receive timeout: {:?}", e);
             }
 
-            if debug {
-                println!("Connecting to tcp://localhost:5555");
-            }
+            debug!("Connecting to tcp://localhost:5555");
 
             if let Err(e) = subscriber.connect("tcp://localhost:5555") {
-                if debug {
-                    println!("Failed to connect: {:?}", e);
-                    println!("Is the Python script running and binding to port 5555?");
-                }
+                debug!("Failed to connect: {:?}", e);
+                debug!("Is the Python script running and binding to port 5555?");
                 return;
-            } else if debug {
-                println!("Successfully connected to tcp://localhost:5555");
+            } else {
+                debug!("Successfully connected to tcp://localhost:5555");
             }
 
-            if debug {
-                println!("ZMQ socket setup complete, entering main loop");
-            }
+            debug!("ZMQ socket setup complete, entering main loop");
 
             loop {
                 let is_running = running_clone
                     .lock()
                     .map(|guard| *guard)
                     .unwrap_or_else(|e| {
-                        if debug {
-                            println!("Failed to lock running state: {:?}", e);
-                        }
+                        debug!("Failed to lock running state: {:?}", e);
                         false
                     });
 
@@ -138,42 +120,30 @@ impl StreamManager {
                     continue;
                 }
 
-                if debug {
-                    println!("Attempting to receive ZMQ message...");
-                }
+                debug!("Attempting to receive ZMQ message...");
                 match subscriber.recv_string(zmq::DONTWAIT) {
                     Ok(Ok(msg)) => {
-                        if debug {
-                            println!("ZMQ received raw message: {}", msg);
-                            println!("Message length: {} bytes", msg.len());
-                        }
+                        debug!("ZMQ received raw message: {}", msg);
+                        debug!("Message length: {} bytes", msg.len());
                         match serde_json::from_str::<StreamData>(&msg) {
                             Ok(data) => {
-                                if debug {
-                                    println!("Successfully parsed message: {:?}", data);
-                                }
+                                debug!("Successfully parsed message: {:?}", data);
                                 if sender_clone.send(data).is_err() {
-                                    if debug {
-                                        println!("Failed to send data through channel");
-                                    }
+                                    debug!("Failed to send data through channel");
                                     break;
                                 }
                             }
                             Err(e) => {
-                                if debug {
-                                    println!("Failed to parse message: {:?}", e);
-                                }
+                                debug!("Failed to parse message: {:?}", e);
                             }
                         }
                     }
                     Ok(Err(e)) => {
-                        if debug {
-                            println!("Invalid UTF8 in message: {:?}", e);
-                        }
+                        debug!("Invalid UTF8 in message: {:?}", e);
                     }
                     Err(e) => {
-                        if e != zmq::Error::EAGAIN && debug {
-                            println!("ZMQ receive error: {:?}", e);
+                        if e != zmq::Error::EAGAIN {
+                            debug!("ZMQ receive error: {:?}", e);
                         }
                     }
                 }
@@ -205,23 +175,23 @@ impl StreamManager {
             streams.clear();
         }
 
-        println!("Setting running to true");
+        debug!("Setting running to true");
         if let Ok(mut running) = self.running.lock() {
             *running = true;
-            println!(
+            info!(
                 "Running state set to: {} (address: {:p})",
                 *running, &self.running
             );
         } else {
-            println!("Failed to set running state");
+            warn!("Failed to set running state");
         }
     }
 
     pub fn stop_streaming(&mut self) {
-        println!("Setting running to false");
+        debug!("Setting running to false");
         if let Ok(mut running) = self.running.lock() {
             *running = false;
-            println!(
+            info!(
                 "Running state set to: {} (address: {:p})",
                 *running, &self.running
             );
@@ -252,7 +222,7 @@ impl StreamManager {
             thread::spawn(move || {
                 for line in stdout_reader.lines() {
                     if let Ok(line) = line {
-                        println!("Python output: {}", line);
+                        info!("Python output: {}", line);
                     }
                 }
             });
@@ -270,14 +240,10 @@ pub fn update_streams(stream_manager: ResMut<StreamManager>) {
         return;
     }
 
-    if stream_manager.debug {
-        println!("Checking for new stream data...");
-    }
+    debug!("Checking for new stream data...");
 
     while let Ok(data) = stream_manager.receiver.try_recv() {
-        if stream_manager.debug {
-            println!("Received data for stream: {}", data.stream_id);
-        }
+        debug!("Received data for stream: {}", data.stream_id);
 
         if let Ok(mut streams) = stream_manager.streams.lock() {
             match data.stream_id.as_str() {
@@ -307,15 +273,13 @@ pub fn update_streams(stream_manager: ResMut<StreamManager>) {
                             || data.roll == 0.0
                             || data.yaw == 0.0)
                     {
-                        println!(
+                        debug!(
                             "Warning: Some flight data fields were missing and defaulted to 0.0"
                         );
                     }
                 }
                 _ => {
-                    if stream_manager.debug {
-                        println!("Unknown stream_id: {}", data.stream_id);
-                    }
+                    debug!("Unknown stream_id: {}", data.stream_id);
                 }
             }
         }
