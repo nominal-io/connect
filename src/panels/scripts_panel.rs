@@ -14,7 +14,7 @@ use crate::{
     UiState,
 };
 
-use crate::scene::manual_setup;
+use crate::gym3d::scene::handle_3d_scene_update;
 
 pub fn show_scripts_panel(
     ui: &mut egui::Ui,
@@ -27,7 +27,7 @@ pub fn show_scripts_panel(
     camera_query: &Query<Entity, With<Camera3d>>,
     light_query: &Query<Entity, With<PointLight>>,
     mesh_query: &Query<Entity, With<Mesh3d>>,
-    asset_server: &Res<AssetServer>,
+    _asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
@@ -37,7 +37,7 @@ pub fn show_scripts_panel(
             show_file_controls(
                 ui, commands, app_state, ui_state, 
                 camera_query, light_query, mesh_query,
-                asset_server, meshes, materials
+                _asset_server, meshes, materials
             );
         });
     });
@@ -54,7 +54,7 @@ fn show_file_controls(
     camera_query: &Query<Entity, With<Camera3d>>,
     light_query: &Query<Entity, With<PointLight>>,
     mesh_query: &Query<Entity, With<Mesh3d>>,
-    asset_server: &Res<AssetServer>,
+    _asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
@@ -63,7 +63,7 @@ fn show_file_controls(
             handle_file_selection(
                 path_str, commands, app_state, ui_state,
                 camera_query, light_query, mesh_query,
-                asset_server, meshes, materials
+                _asset_server, meshes, materials
             );
         }
     }
@@ -82,7 +82,7 @@ fn handle_file_selection(
     camera_query: &Query<Entity, With<Camera3d>>,
     light_query: &Query<Entity, With<PointLight>>,
     mesh_query: &Query<Entity, With<Mesh3d>>,
-    asset_server: &Res<AssetServer>,
+    _asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
@@ -102,7 +102,7 @@ fn handle_file_selection(
                     
                     handle_3d_scene_update(
                         &new_config, commands, camera_query, light_query, 
-                        mesh_query, asset_server, meshes, materials
+                        mesh_query, _asset_server, meshes, materials
                     );
                     
                     // Initialize sliders
@@ -121,39 +121,6 @@ fn handle_file_selection(
             }
         },
         Err(e) => println!("Failed to read file: {}", e),
-    }
-}
-
-/// Updates the 3D scene based on config settings - either clearing or reinitializing
-fn handle_3d_scene_update(
-    new_config: &Config,
-    commands: &mut Commands,
-    camera_query: &Query<Entity, With<Camera3d>>,
-    light_query: &Query<Entity, With<PointLight>>,
-    mesh_query: &Query<Entity, With<Mesh3d>>,
-    asset_server: &Res<AssetServer>,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-) {
-    if !new_config.layout.show_3d_scene {
-        // Clear 3D scene
-        for camera_entity in camera_query.iter() {
-            commands.entity(camera_entity).despawn_recursive();
-        }
-        for light_entity in light_query.iter() {
-            commands.entity(light_entity).despawn_recursive();
-        }
-        for entity in mesh_query.iter() {
-            commands.entity(entity).despawn_recursive();
-        }
-    } else {
-        // Reinitialize the 3D scene
-        manual_setup(
-            commands,
-            asset_server,
-            meshes,
-            materials,
-        );
     }
 }
 
