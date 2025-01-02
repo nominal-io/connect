@@ -161,10 +161,8 @@ fn show_script_controls(
         handle_execute_all(app_state, script_outputs, stream_manager, config);
     }
 
-    if has_streaming_scripts(&config.scripts) {
-        if ui.button("Stop Streaming").clicked() {
-            stream_manager.stop_streaming();
-        }
+    if has_streaming_scripts(&config.scripts) && ui.button("Stop Streaming").clicked() {
+        stream_manager.stop_streaming();
     }
 }
 

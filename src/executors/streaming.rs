@@ -114,10 +114,8 @@ impl StreamManager {
                     println!("Is the Python script running and binding to port 5555?");
                 }
                 return;
-            } else {
-                if debug {
-                    println!("Successfully connected to tcp://localhost:5555");
-                }
+            } else if debug {
+                println!("Successfully connected to tcp://localhost:5555");
             }
 
             if debug {

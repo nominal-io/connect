@@ -38,7 +38,7 @@ fn main() {
     if config.layout.show_3d_scene {
         app.add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: config.layout.title.unwrap_or("Connect".to_string()).into(),
+                title: config.layout.title.unwrap_or("Connect".to_string()),
                 mode: WindowMode::Windowed,
                 ..default()
             }),

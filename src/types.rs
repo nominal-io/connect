@@ -138,6 +138,7 @@ where
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct TableDisplayState {
     #[serde(skip)]
     pub last_debug: Option<Instant>,
@@ -145,14 +146,6 @@ pub struct TableDisplayState {
     pub table_debugs: HashMap<String, Instant>,
 }
 
-impl Default for TableDisplayState {
-    fn default() -> Self {
-        Self {
-            last_debug: None,
-            table_debugs: HashMap::new(),
-        }
-    }
-}
 
 #[derive(Resource, Default, Debug, Serialize)]
 pub struct AppState {

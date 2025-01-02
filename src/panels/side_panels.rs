@@ -382,7 +382,7 @@ fn show_input_fields(ui: &mut egui::Ui, tab_id: &str, app_state: &mut AppState, 
                             let value = app_state
                                 .input_values
                                 .entry(field.id.clone())
-                                .or_insert_with(String::new);
+                                .or_default();
                             ui.text_edit_singleline(value);
                         });
                     });
