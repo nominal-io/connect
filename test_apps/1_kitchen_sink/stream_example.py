@@ -31,7 +31,7 @@ def stream_data():
             value = np.sin(t * frequency) + y_offset
             
             data = {
-                "stream_id": "sine_wave",
+                "stream_id": "single_scalar_channel",
                 "timestamp": float(t),
                 "value": float(value)
             }

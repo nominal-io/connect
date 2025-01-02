@@ -88,6 +88,8 @@ pub struct LayoutConfig {
     pub show_3d_scene: bool,
     pub title: Option<String>,
     #[serde(default)]
+    pub left_panel: PanelConfig,
+    #[serde(default)]
     pub right_panel: RightPanelConfig,
     #[serde(default)]
     pub docs: DocsConfig,
@@ -174,7 +176,8 @@ pub struct MarkdownCache {
 
 #[derive(Resource, Default)]
 pub struct UiState {
-    pub selected_tab: String,
+    pub left_selected_tab: String,
+    pub right_selected_tab: String,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -230,4 +233,14 @@ pub struct TableConfig {
     pub data: Vec<Vec<String>>,
     #[serde(default)]
     pub style: TableStyleConfig,
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct PanelConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_panel_width")]
+    pub default_width: f32,
+    #[serde(default)]
+    pub tabs: Vec<TabConfig>,
 }
