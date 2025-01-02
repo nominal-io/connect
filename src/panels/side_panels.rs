@@ -1,14 +1,15 @@
+use bevy::log::*;
 use bevy_egui::egui;
-use egui_plot::{Line, Plot, PlotPoints};
-use egui_extras::{TableBuilder, Column};
 use egui_commonmark::CommonMarkViewer;
-use std::time::{Instant, Duration};
-use std::path::Path;
+use egui_extras::{Column, TableBuilder};
+use egui_plot::{Line, Plot, PlotPoints};
 use std::fs;
+use std::path::Path;
+use std::time::{Duration, Instant};
 
-use crate::types::*;
 use crate::executors::streaming::StreamManager;
 use crate::has_streaming_scripts;
+use crate::types::*;
 
 /// Displays the left panel of the application UI if enabled in the config.
 pub fn show_left_panel(
@@ -28,7 +29,11 @@ pub fn show_left_panel(
         .default_width(window_width * config.layout.left_panel.default_width)
         .resizable(true)
         .show(ctx, |ui| {
-            show_tab_bar(ui, &mut ui_state.left_selected_tab, &config.layout.left_panel.tabs);
+            show_tab_bar(
+                ui,
+                &mut ui_state.left_selected_tab,
+                &config.layout.left_panel.tabs,
+            );
             ui.separator();
             show_tab_content(
                 ui,
@@ -59,7 +64,11 @@ pub fn show_right_panel(
         .default_width(window_width * config.layout.right_panel.default_width)
         .resizable(true)
         .show(ctx, |ui| {
-            show_tab_bar(ui, &mut ui_state.right_selected_tab, &config.layout.right_panel.tabs);
+            show_tab_bar(
+                ui,
+                &mut ui_state.right_selected_tab,
+                &config.layout.right_panel.tabs,
+            );
             ui.separator();
             show_tab_content(
                 ui,
@@ -96,7 +105,14 @@ fn show_tab_content(
 ) {
     match selected_tab {
         "table_view" => show_table_view(ui, app_state),
-        tab_id => show_other_tab_content(ui, tab_id, app_state, config, stream_manager, markdown_cache),
+        tab_id => show_other_tab_content(
+            ui,
+            tab_id,
+            app_state,
+            config,
+            stream_manager,
+            markdown_cache,
+        ),
     }
 }
 
@@ -108,8 +124,15 @@ fn show_table_view(ui: &mut egui::Ui, app_state: &mut AppState) {
 
     ui.push_id("table_view_container", |ui| {
         // Overall debug message
-        if should_debug(app_state.table_display_state.last_debug, now, debug_interval) {
-            println!("Table view tab selected. Tables count: {}", app_state.script_tables.len());
+        if should_debug(
+            app_state.table_display_state.last_debug,
+            now,
+            debug_interval,
+        ) {
+            debug!(
+                "Table view tab selected. Tables count: {}",
+                app_state.script_tables.len()
+            );
             app_state.table_display_state.last_debug = Some(now);
         }
 
@@ -149,11 +172,16 @@ fn show_tables_scroll_area(
 /// Logs debug information about tables being displayed,
 /// including the number of columns and rows for each table.
 fn debug_tables(app_state: &mut AppState, now: Instant, debug_interval: Duration) {
-    let debug_tables: Vec<_> = app_state.script_tables
+    let debug_tables: Vec<_> = app_state
+        .script_tables
         .iter()
         .filter(|(script_name, _)| {
             should_debug(
-                app_state.table_display_state.table_debugs.get(*script_name).copied(),
+                app_state
+                    .table_display_state
+                    .table_debugs
+                    .get(*script_name)
+                    .copied(),
                 now,
                 debug_interval,
             )
@@ -162,8 +190,14 @@ fn debug_tables(app_state: &mut AppState, now: Instant, debug_interval: Duration
         .collect();
 
     for (script_name, cols, rows) in debug_tables {
-        println!("Displaying table for {}: {} columns, {} rows", script_name, cols, rows);
-        app_state.table_display_state.table_debugs.insert(script_name, now);
+        debug!(
+            "Displaying table for {}: {} columns, {} rows",
+            script_name, cols, rows
+        );
+        app_state
+            .table_display_state
+            .table_debugs
+            .insert(script_name, now);
     }
 }
 
@@ -175,7 +209,7 @@ fn render_tables(ui: &mut egui::Ui, app_state: &AppState) {
             ui.push_id(format!("table_heading_{}", script_name), |ui| {
                 ui.heading(script_name);
             });
-            
+
             show_table_grid(ui, script_name, table_data);
 
             ui.push_id(format!("table_spacing_{}", script_name), |ui| {
@@ -192,7 +226,10 @@ fn show_table_grid(ui: &mut egui::Ui, script_name: &str, table_data: &TableData)
         TableBuilder::new(ui)
             .striped(true)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .columns(Column::auto().at_least(80.0).resizable(true), table_data.columns.len())
+            .columns(
+                Column::auto().at_least(80.0).resizable(true),
+                table_data.columns.len(),
+            )
             .header(30.0, |mut header| {
                 show_table_header(&mut header, script_name, table_data);
             })
@@ -204,7 +241,11 @@ fn show_table_grid(ui: &mut egui::Ui, script_name: &str, table_data: &TableData)
 
 /// Renders the header row of a table with column names.
 /// Each column header is displayed in bold text.
-fn show_table_header(header: &mut egui_extras::TableRow, script_name: &str, table_data: &TableData) {
+fn show_table_header(
+    header: &mut egui_extras::TableRow,
+    script_name: &str,
+    table_data: &TableData,
+) {
     for (col_idx, col_name) in table_data.columns.iter().enumerate() {
         header.col(|ui| {
             ui.push_id(format!("header_{}_{}", script_name, col_idx), |ui| {
@@ -221,9 +262,12 @@ fn show_table_body(body: &mut egui_extras::TableBody, script_name: &str, table_d
         body.row(25.0, |mut row| {
             for (col_idx, cell) in row_data.iter().enumerate() {
                 row.col(|ui| {
-                    ui.push_id(format!("cell_{}_{}_{}", script_name, row_idx, col_idx), |ui| {
-                        ui.label(cell);
-                    });
+                    ui.push_id(
+                        format!("cell_{}_{}_{}", script_name, row_idx, col_idx),
+                        |ui| {
+                            ui.label(cell);
+                        },
+                    );
                 });
             }
         });
@@ -265,7 +309,8 @@ fn show_plot_if_configured(
                         // Changed from "sine_wave" to "single_scalar_channel"
                         if let Some(points) = streams.get("single_scalar_channel") {
                             if !points.is_empty() {
-                                let plot_points: Vec<[f64; 2]> = points.iter()
+                                let plot_points: Vec<[f64; 2]> = points
+                                    .iter()
                                     .filter_map(|point| point.as_plot2d())
                                     .collect();
                                 let line = Line::new(PlotPoints::new(plot_points));
@@ -292,19 +337,23 @@ fn show_docs_if_configured(
     if config.layout.docs.tab == tab_id {
         ui.push_id("instructions_container", |ui| {
             if let Some(opened_file) = &app_state.opened_file {
-                let full_docs_path = opened_file.parent()
+                let full_docs_path = opened_file
+                    .parent()
                     .unwrap_or_else(|| Path::new(""))
                     .join(&config.layout.docs.path);
-                
+
                 match fs::read_to_string(&full_docs_path) {
                     Ok(content) => {
                         egui::ScrollArea::vertical()
                             .id_salt("instructions_scroll")
                             .show(ui, |ui| {
-                                CommonMarkViewer::new()
-                                    .show(ui, &mut markdown_cache.cache, &content);
+                                CommonMarkViewer::new().show(
+                                    ui,
+                                    &mut markdown_cache.cache,
+                                    &content,
+                                );
                             });
-                    },
+                    }
                     Err(e) => {
                         ui.label(format!("Could not load documentation: {}", e));
                     }
@@ -317,10 +366,13 @@ fn show_docs_if_configured(
 /// Renders input fields configured for the current tab.
 /// Each field includes a label and a single-line text input.
 fn show_input_fields(ui: &mut egui::Ui, tab_id: &str, app_state: &mut AppState, config: &Config) {
-    let tab_input_fields: Vec<_> = config.layout.input_fields.iter()
+    let tab_input_fields: Vec<_> = config
+        .layout
+        .input_fields
+        .iter()
         .filter(|field| field.tab == tab_id)
         .collect();
-    
+
     if !tab_input_fields.is_empty() {
         ui.push_id("input_fields_section", |ui| {
             ui.vertical(|ui| {
@@ -328,9 +380,7 @@ fn show_input_fields(ui: &mut egui::Ui, tab_id: &str, app_state: &mut AppState, 
                     ui.push_id(&field.id, |ui| {
                         ui.horizontal(|ui| {
                             ui.label(&field.label);
-                            let value = app_state.input_values
-                                .entry(field.id.clone())
-                                .or_insert_with(String::new);
+                            let value = app_state.input_values.entry(field.id.clone()).or_default();
                             ui.text_edit_singleline(value);
                         });
                     });
@@ -344,10 +394,13 @@ fn show_input_fields(ui: &mut egui::Ui, tab_id: &str, app_state: &mut AppState, 
 /// Displays slider controls configured for the current tab.
 /// Each slider includes a label and allows value adjustment within defined bounds.
 fn show_sliders(ui: &mut egui::Ui, tab_id: &str, app_state: &mut AppState, config: &Config) {
-    let tab_sliders: Vec<_> = config.layout.sliders.iter()
+    let tab_sliders: Vec<_> = config
+        .layout
+        .sliders
+        .iter()
         .filter(|slider| slider.tab == tab_id)
         .collect();
-    
+
     if !tab_sliders.is_empty() {
         ui.push_id("sliders_section", |ui| {
             ui.vertical(|ui| {
@@ -355,13 +408,11 @@ fn show_sliders(ui: &mut egui::Ui, tab_id: &str, app_state: &mut AppState, confi
                     ui.push_id(&slider.id, |ui| {
                         ui.horizontal(|ui| {
                             ui.label(&slider.label);
-                            let value = app_state.slider_values
+                            let value = app_state
+                                .slider_values
                                 .entry(slider.id.clone())
                                 .or_insert(slider.default);
-                            let _ = ui.add(egui::Slider::new(
-                                value, 
-                                slider.min..=slider.max
-                            ));
+                            let _ = ui.add(egui::Slider::new(value, slider.min..=slider.max));
                         });
                     });
                 }

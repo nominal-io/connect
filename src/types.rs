@@ -1,9 +1,9 @@
+use bevy::prelude::*;
+use egui_commonmark::CommonMarkCache;
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
-use serde::{Deserialize, Deserializer, Serialize};
-use bevy::prelude::*;
-use egui_commonmark::CommonMarkCache;
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum AppSet {
@@ -103,9 +103,15 @@ pub struct LayoutConfig {
     pub table: TableConfig,
 }
 
-pub fn default_slider_min() -> f32 { -10.0 }
-pub fn default_slider_max() -> f32 { 10.0 }
-pub fn default_slider_value() -> f32 { 0.0 }
+pub fn default_slider_min() -> f32 {
+    -10.0
+}
+pub fn default_slider_max() -> f32 {
+    10.0
+}
+pub fn default_slider_value() -> f32 {
+    0.0
+}
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct TableData {
@@ -132,6 +138,7 @@ where
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct TableDisplayState {
     #[serde(skip)]
     pub last_debug: Option<Instant>,
@@ -139,14 +146,6 @@ pub struct TableDisplayState {
     pub table_debugs: HashMap<String, Instant>,
 }
 
-impl Default for TableDisplayState {
-    fn default() -> Self {
-        Self {
-            last_debug: None,
-            table_debugs: HashMap::new(),
-        }
-    }
-}
 
 #[derive(Resource, Default, Debug, Serialize)]
 pub struct AppState {
@@ -190,7 +189,9 @@ pub struct RightPanelConfig {
     pub tabs: Vec<TabConfig>,
 }
 
-pub fn default_panel_width() -> f32 { 0.3 }
+pub fn default_panel_width() -> f32 {
+    0.3
+}
 
 #[derive(Deserialize, Debug, Default)]
 pub struct TabConfig {
@@ -220,7 +221,9 @@ pub struct TableStyleConfig {
     pub row_height: f32,
 }
 
-pub fn default_row_height() -> f32 { 30.0 }
+pub fn default_row_height() -> f32 {
+    30.0
+}
 
 #[derive(Deserialize, Debug, Default)]
 #[allow(dead_code)]
