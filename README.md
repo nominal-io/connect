@@ -7,16 +7,15 @@ Connect your hardware to Nominal
 
 1. Clone this repo
 2. [Install Rust](https://www.rust-lang.org/tools/install) (try `rustup -V` in your terminal to check)
-3. [Install UV](https://docs.astral.sh/uv/getting-started/installation/)
-3. In the `connect` folder, create and activate a virtual environment:
+3. [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
+4. Run `uv venv` to create a virtual env with the required dependencies
+5. Activate the environment:
 
 ```sh
-python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-4. Install ZMQ & numpy in this environment: `pip3 install pyzmq numpy`
-5. Run `cargo run` - an app should appear with the default config loaded
+6. Run `cargo run` - an app should appear with the default config loaded
 
 ## Usage
 
