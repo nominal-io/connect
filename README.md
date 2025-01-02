@@ -7,6 +7,7 @@ Connect your hardware to Nominal
 
 1. Clone this repo
 2. [Install Rust](https://www.rust-lang.org/tools/install) (try `rustup -V` in your terminal to check)
+3. [Install UV](https://docs.astral.sh/uv/getting-started/installation/)
 3. In the `connect` folder, create and activate a virtual environment:
 
 ```sh

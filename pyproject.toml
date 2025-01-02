@@ -6,5 +6,5 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.2.1",
-    "zmq>=0.0.0",
+    "pyzmq>=26.2.0",
 ]
