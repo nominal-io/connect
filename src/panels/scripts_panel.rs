@@ -2,16 +2,14 @@ use crate::executors::streaming::StreamManager;
 
 use bevy::prelude::*;
 use bevy_egui::egui;
+use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::io::Write;
-use std::fs;
 use tinyfiledialogs::open_file_dialog;
 
 use crate::{
-    AppState, Config, ScriptConfig, ScriptOutputs,
-    execute_script, has_streaming_scripts,
-    UiState,
+    execute_script, has_streaming_scripts, AppState, Config, ScriptConfig, ScriptOutputs, UiState,
 };
 
 use crate::gym3d::scene::handle_3d_scene_update;
@@ -35,9 +33,16 @@ pub fn show_scripts_panel(
         show_script_controls(ui, app_state, script_outputs, stream_manager, config);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             show_file_controls(
-                ui, commands, app_state, ui_state, 
-                camera_query, light_query, mesh_query,
-                _asset_server, meshes, materials
+                ui,
+                commands,
+                app_state,
+                ui_state,
+                camera_query,
+                light_query,
+                mesh_query,
+                _asset_server,
+                meshes,
+                materials,
             );
         });
     });
@@ -61,9 +66,16 @@ fn show_file_controls(
     if ui.button("Open Config File").clicked() {
         if let Some(path_str) = open_file_dialog("Open File", "~", None) {
             handle_file_selection(
-                path_str, commands, app_state, ui_state,
-                camera_query, light_query, mesh_query,
-                _asset_server, meshes, materials
+                path_str,
+                commands,
+                app_state,
+                ui_state,
+                camera_query,
+                light_query,
+                mesh_query,
+                _asset_server,
+                meshes,
+                materials,
             );
         }
     }
@@ -88,38 +100,46 @@ fn handle_file_selection(
 ) {
     println!("Selected file: {}", path_str);
     let new_path = PathBuf::from(path_str);
-    
+
     match fs::read_to_string(&new_path) {
         Ok(new_content) => {
             match toml::from_str::<Config>(&new_content) {
                 Ok(new_config) => {
                     println!("Config loaded successfully: {:?}", new_config);
-                    
+
                     // Clear existing state
                     app_state.input_values.clear();
                     app_state.script_results.clear();
                     app_state.slider_values.clear();
-                    
+
                     handle_3d_scene_update(
-                        &new_config, commands, camera_query, light_query, 
-                        mesh_query, _asset_server, meshes, materials
+                        &new_config,
+                        commands,
+                        camera_query,
+                        light_query,
+                        mesh_query,
+                        _asset_server,
+                        meshes,
+                        materials,
                     );
-                    
+
                     // Initialize sliders
                     for slider in &new_config.layout.sliders {
-                        app_state.slider_values.insert(slider.id.clone(), slider.default);
+                        app_state
+                            .slider_values
+                            .insert(slider.id.clone(), slider.default);
                     }
-                    
+
                     app_state.opened_file = Some(new_path);
-                    
+
                     // Update selected tab
                     if let Some(first_tab) = new_config.layout.right_panel.tabs.first() {
                         ui_state.right_selected_tab = first_tab.id.clone();
                     }
-                },
+                }
                 Err(e) => println!("Failed to parse config: {}", e),
             }
-        },
+        }
         Err(e) => println!("Failed to read file: {}", e),
     }
 }
@@ -132,9 +152,11 @@ fn show_script_controls(
     stream_manager: &mut StreamManager,
     config: &Config,
 ) {
-    if ui.button(egui::RichText::new("Execute All Scripts")
-        .color(egui::Color32::from_rgb(0, 255, 0)))
-        .clicked() 
+    if ui
+        .button(
+            egui::RichText::new("Execute All Scripts").color(egui::Color32::from_rgb(0, 255, 0)),
+        )
+        .clicked()
     {
         handle_execute_all(app_state, script_outputs, stream_manager, config);
     }
@@ -155,11 +177,11 @@ fn handle_execute_all(
 ) {
     println!("Button clicked!");
     script_outputs.results.clear();
-    
+
     if has_streaming_scripts(&config.scripts) {
         stream_manager.start_streaming();
     }
-    
+
     for script in &config.scripts {
         match script.script_type.as_str() {
             "discrete" => handle_discrete_script(script, app_state, script_outputs),
@@ -190,13 +212,18 @@ fn handle_streaming_script(
     app_state: &mut AppState,
     stream_manager: &mut StreamManager,
 ) {
-    let config_dir = app_state.opened_file
+    let config_dir = app_state
+        .opened_file
         .as_ref()
         .and_then(|p| p.parent())
         .unwrap_or_else(|| Path::new("."));
-    
+
     let script_path = config_dir.join(&script.path);
-    println!("Launching streaming script: {} ({})", script.name, script_path.display());
+    println!(
+        "Launching streaming script: {} ({})",
+        script.name,
+        script_path.display()
+    );
 
     let state_json = app_state.to_json();
     let mut child = Command::new("python3")
@@ -206,7 +233,9 @@ fn handle_streaming_script(
         .expect("Failed to spawn streaming script");
 
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(state_json.as_bytes()).expect("Failed to write to stdin");
+        stdin
+            .write_all(state_json.as_bytes())
+            .expect("Failed to write to stdin");
     }
 
     stream_manager.add_streaming_process(child);
@@ -236,10 +265,13 @@ fn show_scripts_grid(
 fn show_grid_headers(ui: &mut egui::Ui) {
     ui.label("");
     ui.label("Script");
-    ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
-        ui.set_min_width(200.0);
-        ui.label("Actions");
-    });
+    ui.with_layout(
+        egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true),
+        |ui| {
+            ui.set_min_width(200.0);
+            ui.label("Actions");
+        },
+    );
     ui.label("Output");
     ui.label("Pass/Fail");
     ui.label("");
@@ -278,13 +310,16 @@ fn show_single_script_row(
 ) {
     ui.label(row_count.to_string());
     ui.label(&script.path);
-    
-    ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
-        ui.set_min_width(200.0);
-        if ui.button(function_name.unwrap_or("Run")).clicked() {
-            execute_script(script, function_name, app_state, script_outputs);
-        }
-    });
+
+    ui.with_layout(
+        egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true),
+        |ui| {
+            ui.set_min_width(200.0);
+            if ui.button(function_name.unwrap_or("Run")).clicked() {
+                execute_script(script, function_name, app_state, script_outputs);
+            }
+        },
+    );
 
     let output_key = if let Some(func_name) = function_name {
         format!("{}_{}", script.name, func_name)
@@ -292,12 +327,17 @@ fn show_single_script_row(
         script.name.clone()
     };
 
-    let output = app_state.script_results
+    let output = app_state
+        .script_results
         .get(&output_key)
         .map_or("", |s| s.as_str())
         .trim();
-    
-    ui.label(if output.is_empty() { "No output" } else { output });
+
+    ui.label(if output.is_empty() {
+        "No output"
+    } else {
+        output
+    });
     show_status_indicator(ui, output);
     ui.label("");
     ui.end_row();
@@ -318,21 +358,29 @@ fn show_script_with_functions(
         } else {
             ui.label("");
         }
-        
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
-            ui.set_min_width(200.0);
-            if ui.button(&func.display).clicked() {
-                execute_script(script, Some(&func.name), app_state, script_outputs);
-            }
-        });
+
+        ui.with_layout(
+            egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true),
+            |ui| {
+                ui.set_min_width(200.0);
+                if ui.button(&func.display).clicked() {
+                    execute_script(script, Some(&func.name), app_state, script_outputs);
+                }
+            },
+        );
 
         let output_key = format!("{}_{}", script.name, func.name);
-        let output = app_state.script_results
+        let output = app_state
+            .script_results
             .get(&output_key)
             .map_or("", |s| s.as_str())
             .trim();
-        
-        ui.label(if output.is_empty() { "No output" } else { output });
+
+        ui.label(if output.is_empty() {
+            "No output"
+        } else {
+            output
+        });
         show_status_indicator(ui, output);
         ui.label("");
         ui.end_row();
@@ -351,17 +399,16 @@ fn show_status_indicator(ui: &mut egui::Ui, output: &str) {
 }
 
 /// Displays information about currently running streaming scripts
-fn show_streaming_scripts(
-    ui: &mut egui::Ui,
-    stream_manager: &StreamManager,
-    config: &Config,
-) {
+fn show_streaming_scripts(ui: &mut egui::Ui, stream_manager: &StreamManager, config: &Config) {
     if has_streaming_scripts(&config.scripts) {
         ui.label("Streaming Scripts");
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true), |ui| {
-            ui.set_min_width(200.0);
-            ui.label("Status");
-        });
+        ui.with_layout(
+            egui::Layout::left_to_right(egui::Align::LEFT).with_cross_justify(true),
+            |ui| {
+                ui.set_min_width(200.0);
+                ui.label("Status");
+            },
+        );
         ui.label("");
         ui.label("");
         ui.end_row();
@@ -369,7 +416,11 @@ fn show_streaming_scripts(
         for script in &config.scripts {
             if script.script_type == "streaming" {
                 ui.label(&script.path);
-                ui.label(if stream_manager.is_running() { "Running" } else { "Stopped" });
+                ui.label(if stream_manager.is_running() {
+                    "Running"
+                } else {
+                    "Stopped"
+                });
                 ui.label("");
                 ui.label("");
                 ui.end_row();

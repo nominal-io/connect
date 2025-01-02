@@ -1,14 +1,17 @@
-use bevy::{
-    prelude::*,
-    render::{render_resource::{AsBindGroup, ShaderRef}, view::ViewUniform},
-    reflect::TypePath,
-    render::mesh::Indices,
-    render::render_resource::PrimitiveTopology,
-    render::render_asset::RenderAssetUsages,
-};
+use crate::executors::streaming::StreamManager;
 use crate::gym3d::camera::OrbitCamera;
 use crate::Config;
-use crate::executors::streaming::StreamManager;
+use bevy::{
+    prelude::*,
+    reflect::TypePath,
+    render::mesh::Indices,
+    render::render_asset::RenderAssetUsages,
+    render::render_resource::PrimitiveTopology,
+    render::{
+        render_resource::{AsBindGroup, ShaderRef},
+        view::ViewUniform,
+    },
+};
 
 /// Material for rendering an infinite grid with customizable scale and line width.
 /// Used for creating a visual reference plane in 3D space.
@@ -47,7 +50,7 @@ pub struct InfinitePlane;
 
 /// Updates the position of the infinite plane to follow the camera's X and Z coordinates.
 /// This creates the illusion of an infinite grid extending to the horizon.
-/// 
+///
 /// # Arguments
 /// * `plane_query` - Query for the infinite plane's transform
 /// * `camera_query` - Query for the camera's transform
@@ -55,19 +58,23 @@ pub fn update_infinite_plane(
     mut plane_query: Query<&mut Transform, With<InfinitePlane>>,
     camera_query: Query<&Transform, (With<Camera>, Without<InfinitePlane>)>,
 ) {
-    let Ok(camera_transform) = camera_query.get_single() else { return };
-    let Ok(mut plane_transform) = plane_query.get_single_mut() else { return };
+    let Ok(camera_transform) = camera_query.get_single() else {
+        return;
+    };
+    let Ok(mut plane_transform) = plane_query.get_single_mut() else {
+        return;
+    };
 
     // Get camera position
     let camera_pos = camera_transform.translation;
-    
+
     // Update plane position to follow camera (only X and Z, keep Y at 0)
     plane_transform.translation.x = camera_pos.x;
     plane_transform.translation.z = camera_pos.z;
 }
 
 /// Creates a basic 3D scene with an infinite grid floor and camera setup.
-/// 
+///
 /// # Arguments
 /// * `commands` - Commands for entity creation
 /// * `meshes` - Asset storage for meshes
@@ -136,7 +143,6 @@ fn create_scene(
     // Move camera closer and look down
     commands.spawn((
         Camera3d::default(),
-
         Transform::from_xyz(0.0, 5.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z),
         OrbitCamera::default(),
     ));
@@ -153,14 +159,13 @@ fn create_scene(
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(5.0, 5.0, 0.0)
-            .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        Transform::from_xyz(5.0, 5.0, 0.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
     ));
 }
 
 /// Initializes the 3D scene and sets up the camera position.
 /// This is typically called during the initial setup phase.
-/// 
+///
 /// # Arguments
 /// * `commands` - Commands for entity creation
 /// * `meshes` - Asset storage for meshes
@@ -179,12 +184,17 @@ pub fn initialize_scene_with_camera(
         *transform = Transform::from_xyz(0.0, 10.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y);
     }
 
-    create_scene(&mut commands, &mut meshes, &mut materials, &mut standard_materials);
+    create_scene(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &mut standard_materials,
+    );
 }
 
 /// Creates a basic scene with a simple colored floor using StandardMaterial.
 /// This is an alternative to the infinite grid setup.
-/// 
+///
 /// # Arguments
 /// * `commands` - Commands for entity creation
 /// * `meshes` - Asset storage for meshes
@@ -210,7 +220,7 @@ pub fn create_scene_with_basic_floor(
 
 /// Updates the 3D scene based on configuration changes.
 /// Either clears the entire scene or reinitializes it with basic components.
-/// 
+///
 /// # Arguments
 /// * `new_config` - New configuration settings
 /// * `commands` - Commands for entity manipulation
@@ -243,11 +253,7 @@ pub fn handle_3d_scene_update(
         }
     } else {
         // Reinitialize the 3D scene
-        create_scene_with_basic_floor(
-            commands,
-            meshes,
-            materials,
-        );
+        create_scene_with_basic_floor(commands, meshes, materials);
     }
 }
 
@@ -259,7 +265,10 @@ pub struct CubeTrail;
 
 /// Creates a line mesh from points
 fn create_line_mesh(points: &[Vec3]) -> Mesh {
-    let mut mesh = Mesh::new(PrimitiveTopology::LineStrip, RenderAssetUsages::RENDER_WORLD);
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::LineStrip,
+        RenderAssetUsages::RENDER_WORLD,
+    );
 
     // Handle empty case
     if points.is_empty() {
@@ -268,44 +277,55 @@ fn create_line_mesh(points: &[Vec3]) -> Mesh {
         mesh.insert_indices(Indices::U32(vec![0, 1]));
         return mesh;
     }
-    
+
     // Convert points to arrays for mesh
     let positions: Vec<[f32; 3]> = points.iter().map(|p| p.to_array()).collect();
-    
+
     // Find min and max heights for normalization
-    let min_height = points.iter().map(|p| p.y).min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap_or(0.0);
-    let max_height = points.iter().map(|p| p.y).max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap_or(1.0);
+    let min_height = points
+        .iter()
+        .map(|p| p.y)
+        .min_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap_or(0.0);
+    let max_height = points
+        .iter()
+        .map(|p| p.y)
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap_or(1.0);
     let height_range = max_height - min_height;
 
     // Create colors based on height
-    let colors: Vec<[f32; 4]> = points.iter().map(|p| {
-        let t = if height_range == 0.0 {
-            0.0
-        } else {
-            (p.y - min_height) / height_range
-        };
-        
-        // Interpolate between colors: blue (low) -> green (middle) -> red (high)
-        if t < 0.5 {
-            let t2 = t * 2.0;
-            [0.0, t2, 1.0 - t2, 1.0] // blue to green
-        } else {
-            let t2 = (t - 0.5) * 2.0;
-            [t2, 1.0 - t2, 0.0, 1.0] // green to red
-        }
-    }).collect();
-    
+    let colors: Vec<[f32; 4]> = points
+        .iter()
+        .map(|p| {
+            let t = if height_range == 0.0 {
+                0.0
+            } else {
+                (p.y - min_height) / height_range
+            };
+
+            // Interpolate between colors: blue (low) -> green (middle) -> red (high)
+            if t < 0.5 {
+                let t2 = t * 2.0;
+                [0.0, t2, 1.0 - t2, 1.0] // blue to green
+            } else {
+                let t2 = (t - 0.5) * 2.0;
+                [t2, 1.0 - t2, 0.0, 1.0] // green to red
+            }
+        })
+        .collect();
+
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-    
+
     let indices: Vec<u32> = (0..points.len() as u32).collect();
     mesh.insert_indices(Indices::U32(indices));
-    
+
     mesh
 }
 
 /// Updates the position of the cube and its trail.
-/// 
+///
 /// # Arguments
 /// * `stream_manager` - Stream manager for accessing flight_position stream
 /// * `cube_query` - Query for the cube's transform
@@ -335,21 +355,17 @@ pub fn update_cube_position(
                         let roll_rad = (roll as f32).to_radians();
 
                         // Create rotation quaternion using yaw (y-axis), pitch (x-axis), and roll (z-axis)
-                        transform.rotation = Quat::from_euler(EulerRot::YXZ, yaw_rad, pitch_rad, roll_rad);
+                        transform.rotation =
+                            Quat::from_euler(EulerRot::YXZ, yaw_rad, pitch_rad, roll_rad);
                     }
                 }
 
                 // Update trail with all points
                 if let Ok((mut trail_mesh, _)) = trail_query.get_single_mut() {
-                    let trail_points: Vec<Vec3> = points.iter()
+                    let trail_points: Vec<Vec3> = points
+                        .iter()
                         .filter_map(|point| point.as_flight_data())
-                        .map(|[lat, lon, alt, ..]| {
-                            Vec3::new(
-                                lat as f32,
-                                alt as f32,
-                                lon as f32
-                            )
-                        })
+                        .map(|[lat, lon, alt, ..]| Vec3::new(lat as f32, alt as f32, lon as f32))
                         .collect();
 
                     if !trail_points.is_empty() {

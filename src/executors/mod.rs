@@ -1,2 +1,2 @@
-pub mod streaming;
 pub mod discrete;
+pub mod streaming;
