@@ -3,36 +3,39 @@ mod gym3d;
 mod types;
 mod panels;
 
-use executors::streaming::{StreamManager, update_streams};
-use executors::discrete::execute_script;
-use gym3d::camera::orbit_camera;
-use gym3d::scene::initialize_scene_with_camera;
-use gym3d::scene::InfiniteGridMaterial;
-use gym3d::scene::update_infinite_plane;
-use types::*;
-
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use std::fs;
 use bevy::window::{WindowMode, Window};
 use std::path::PathBuf;
-use crate::panels::side_panels::show_right_panel;
-use crate::gym3d::camera::setup_isometric_camera;
+
+use executors::{
+    streaming::{StreamManager, update_streams},
+    discrete::execute_script,
+};
+use gym3d::{
+    camera::{orbit_camera, setup_isometric_camera},
+    scene::{
+        InfiniteGridMaterial,
+        initialize_scene_with_camera,
+        update_infinite_plane, 
+        update_cube_position,
+    },
+};
+use panels::side_panels::{show_left_panel, show_right_panel};
+
+use types::*;
+
+const DEFAULT_CONFIG_PATH: &str = "test_apps/4_flight_replay/config.toml";
 
 fn main() {
-    let default_config = PathBuf::from("test_apps/1_kitchen_sink/config.toml");
+    let default_config = PathBuf::from(DEFAULT_CONFIG_PATH);
     let content = fs::read_to_string(&default_config).unwrap_or_default();
     let config: Config = toml::from_str(&content).unwrap_or_default();
     
     // Initialize Bevy app
     let mut app = bevy::prelude::App::new();
 
-    // Get the initial tab from config
-    let initial_tab = config.layout.right_panel.tabs
-        .first()
-        .map(|tab| tab.id.clone())
-        .unwrap_or_default();    
-    
     // Configure default plugins based on whether 3D scene is enabled
     if config.layout.show_3d_scene {
         app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -62,7 +65,14 @@ fn main() {
             ..default()
         })
         .insert_resource(UiState {
-            selected_tab: initial_tab,
+            left_selected_tab: config.layout.left_panel.tabs
+                .first()
+                .map(|tab| tab.id.clone())
+                .unwrap_or_default(),
+            right_selected_tab: config.layout.right_panel.tabs
+                .first()
+                .map(|tab| tab.id.clone())
+                .unwrap_or_default(),
         })
         .insert_resource(MarkdownCache::default())
         .add_plugins(MaterialPlugin::<InfiniteGridMaterial>::default())
@@ -71,6 +81,7 @@ fn main() {
     app.add_systems(Update, (
         egui_system,
         update_streams,
+        update_cube_position,
     ).in_set(AppSet::Main))
     .run();
 }
@@ -102,10 +113,25 @@ fn egui_system(
     let content = fs::read_to_string(config_path).unwrap_or_default();
     let config: Config = toml::from_str(&content).unwrap_or_default();
     
+    // Get the window width
+    let window_width = windows.single().width();
+
     // Show help text only if 3D scene is enabled
     if config.layout.show_3d_scene {
+        let has_left_panel = !config.layout.left_panel.tabs.is_empty();
+        let has_right_panel = !config.layout.right_panel.tabs.is_empty();
+        
+        // Calculate x position based on panels
+        let x_pos = if has_left_panel && has_right_panel {
+            // Center between panels
+            window_width / 2.0
+        } else {
+            // Default left position
+            10.0
+        };
+
         egui::Area::new("help_text".into())
-            .fixed_pos(egui::pos2(10.0, 40.0))
+            .fixed_pos(egui::pos2(x_pos, 40.0))
             .show(contexts.ctx_mut(), |ui| {
                 ui.vertical(|ui| {
                     ui.label("Shift-click to pan");
@@ -143,7 +169,17 @@ fn egui_system(
         );
     });
 
-    // Replace the entire right panel implementation with:
+    // Show both panels
+    show_left_panel(
+        &mut ui_state,
+        &mut app_state,
+        &config,
+        window_width,
+        &stream_manager,
+        &mut markdown_cache,
+        contexts.ctx_mut(),
+    );
+
     show_right_panel(
         &mut ui_state,
         &mut app_state,

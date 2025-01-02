@@ -46,7 +46,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     
     // Fade to darker color in the distance
     let fade_color = color1;
-    let color_with_fade = mix(contrast_adjusted, fade_color, fade_factor);
+    let base_color = mix(contrast_adjusted, fade_color, fade_factor);
     
-    return vec4<f32>(color_with_fade, 1.0);
+    return vec4<f32>(base_color, 1.0);
 } 

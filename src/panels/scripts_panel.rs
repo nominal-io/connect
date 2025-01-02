@@ -114,7 +114,7 @@ fn handle_file_selection(
                     
                     // Update selected tab
                     if let Some(first_tab) = new_config.layout.right_panel.tabs.first() {
-                        ui_state.selected_tab = first_tab.id.clone();
+                        ui_state.right_selected_tab = first_tab.id.clone();
                     }
                 },
                 Err(e) => println!("Failed to parse config: {}", e),

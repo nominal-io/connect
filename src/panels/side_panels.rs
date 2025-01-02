@@ -10,8 +10,38 @@ use crate::types::*;
 use crate::executors::streaming::StreamManager;
 use crate::has_streaming_scripts;
 
+/// Displays the left panel of the application UI if enabled in the config.
+pub fn show_left_panel(
+    ui_state: &mut UiState,
+    app_state: &mut AppState,
+    config: &Config,
+    window_width: f32,
+    stream_manager: &StreamManager,
+    markdown_cache: &mut MarkdownCache,
+    ctx: &mut bevy_egui::egui::Context,
+) {
+    if !config.layout.left_panel.enabled {
+        return;
+    }
+
+    egui::SidePanel::left("left_panel")
+        .default_width(window_width * config.layout.left_panel.default_width)
+        .resizable(true)
+        .show(ctx, |ui| {
+            show_tab_bar(ui, &mut ui_state.left_selected_tab, &config.layout.left_panel.tabs);
+            ui.separator();
+            show_tab_content(
+                ui,
+                &ui_state.left_selected_tab,
+                app_state,
+                config,
+                stream_manager,
+                markdown_cache,
+            );
+        });
+}
+
 /// Displays the right panel of the application UI if enabled in the config.
-/// Handles the panel's width, resizability, and contains the tab bar and content.
 pub fn show_right_panel(
     ui_state: &mut UiState,
     app_state: &mut AppState,
@@ -29,20 +59,26 @@ pub fn show_right_panel(
         .default_width(window_width * config.layout.right_panel.default_width)
         .resizable(true)
         .show(ctx, |ui| {
-            show_tab_bar(ui, ui_state, config);
+            show_tab_bar(ui, &mut ui_state.right_selected_tab, &config.layout.right_panel.tabs);
             ui.separator();
-            show_tab_content(ui, ui_state, app_state, config, stream_manager, markdown_cache);
+            show_tab_content(
+                ui,
+                &ui_state.right_selected_tab,
+                app_state,
+                config,
+                stream_manager,
+                markdown_cache,
+            );
         });
 }
 
-/// Renders the horizontal tab bar at the top of the right panel.
-/// Allows users to switch between different tabs defined in the config.
-fn show_tab_bar(ui: &mut egui::Ui, ui_state: &mut UiState, config: &Config) {
+/// Renders the horizontal tab bar at the top of a panel
+fn show_tab_bar(ui: &mut egui::Ui, selected_tab: &mut String, tabs: &[TabConfig]) {
     ui.horizontal(|ui| {
-        for tab in &config.layout.right_panel.tabs {
-            let selected = ui_state.selected_tab == tab.id;
+        for tab in tabs {
+            let selected = *selected_tab == tab.id;
             if ui.selectable_label(selected, &tab.label).clicked() {
-                ui_state.selected_tab = tab.id.clone();
+                *selected_tab = tab.id.clone();
             }
         }
     });
@@ -52,13 +88,13 @@ fn show_tab_bar(ui: &mut egui::Ui, ui_state: &mut UiState, config: &Config) {
 /// Routes to specific view handlers based on the selected tab ID.
 fn show_tab_content(
     ui: &mut egui::Ui,
-    ui_state: &mut UiState,
+    selected_tab: &str,
     app_state: &mut AppState,
     config: &Config,
     stream_manager: &StreamManager,
     markdown_cache: &mut MarkdownCache,
 ) {
-    match ui_state.selected_tab.as_str() {
+    match selected_tab {
         "table_view" => show_table_view(ui, app_state),
         tab_id => show_other_tab_content(ui, tab_id, app_state, config, stream_manager, markdown_cache),
     }
@@ -226,11 +262,13 @@ fn show_plot_if_configured(
             plot.show(ui, |plot_ui| {
                 if has_streaming_scripts(&config.scripts) {
                     if let Ok(streams) = stream_manager.streams.lock() {
-                        for (stream_id, points) in streams.iter() {
+                        // Changed from "sine_wave" to "single_scalar_channel"
+                        if let Some(points) = streams.get("single_scalar_channel") {
                             if !points.is_empty() {
-                                let line = Line::new(PlotPoints::new(points.clone()))
-                                    .name(stream_id)
-                                    .width(2.0);
+                                let plot_points: Vec<[f64; 2]> = points.iter()
+                                    .filter_map(|point| point.as_plot2d())
+                                    .collect();
+                                let line = Line::new(PlotPoints::new(plot_points));
                                 plot_ui.line(line);
                             }
                         }
