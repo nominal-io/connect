@@ -38,7 +38,8 @@ impl StreamPoint {
 pub enum ProcessStatus {
     Running,
     Failed(Option<i32>), // Exit code
-    Finished,
+    Finished,            // Finished execution itself
+    Stopped,             // Stopped by this process
 }
 
 #[derive(Resource)]
@@ -206,16 +207,18 @@ impl StreamManager {
             );
         }
 
-        // Kill all streaming processes
+        // Kill all streaming processes and mark them as stopped
         if let Ok(mut processes) = self.streaming_processes.lock() {
             for process in processes.iter_mut() {
                 let _ = process.kill();
             }
             processes.clear();
 
-            // Clear process statuses
+            // Mark all processes as stopped
             if let Ok(mut statuses) = self.process_statuses.lock() {
-                statuses.clear();
+                for status in statuses.iter_mut() {
+                    *status = ProcessStatus::Stopped;
+                }
             }
         }
 
@@ -246,7 +249,7 @@ impl StreamManager {
         if let Ok(mut processes) = self.streaming_processes.lock() {
             processes.push(child);
             if let Ok(mut statuses) = self.process_statuses.lock() {
-                statuses.push(ProcessStatus::Running);
+                statuses.push(ProcessStatus::Stopped);
             }
         }
     }
@@ -327,7 +330,8 @@ pub fn check_process_status(stream_manager: ResMut<StreamManager>) {
                     statuses[i] = ProcessStatus::Running;
                 }
                 Err(e) => {
-                    // Error checking process status
+                    error!("Error checking process status: {:?}", e);
+                    // Error checking process status, assume the script isn't running
                     statuses[i] = ProcessStatus::Failed(None);
                 }
             }

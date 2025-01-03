@@ -422,15 +422,15 @@ fn show_streaming_scripts(ui: &mut egui::Ui, stream_manager: &StreamManager, con
                             ui.label("Running");
                         }
                         ProcessStatus::Failed(Some(code)) => {
-                            ui.colored_label(
-                                egui::Color32::RED,
-                                format!("Terminated (code: {})", code),
-                            );
+                            ui.colored_label(egui::Color32::RED, format!("Error (code: {})", code));
                         }
                         ProcessStatus::Failed(None) => {
                             ui.colored_label(egui::Color32::RED, "Terminated (unknown)");
                         }
                         ProcessStatus::Finished => {
+                            ui.colored_label(egui::Color32::GREEN, "Finished");
+                        }
+                        ProcessStatus::Stopped => {
                             ui.label("Stopped");
                         }
                     }

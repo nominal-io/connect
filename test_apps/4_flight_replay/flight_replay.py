@@ -1,6 +1,5 @@
 import zmq
 import time
-import numpy as np
 import sys
 import json
 import polars as pl
