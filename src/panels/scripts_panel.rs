@@ -1,4 +1,4 @@
-use crate::executors::streaming::StreamManager;
+use crate::executors::streaming::{ProcessStatus, StreamManager};
 
 use bevy::prelude::*;
 use bevy_egui::egui;
@@ -410,17 +410,35 @@ fn show_streaming_scripts(ui: &mut egui::Ui, stream_manager: &StreamManager, con
         ui.label("");
         ui.end_row();
 
-        for script in &config.scripts {
-            if script.script_type == "streaming" {
-                ui.label(&script.path);
-                ui.label(if stream_manager.is_running() {
-                    "Running"
-                } else {
-                    "Stopped"
-                });
-                ui.label("");
-                ui.label("");
-                ui.end_row();
+        if let Ok(statuses) = stream_manager.process_statuses.lock() {
+            for (i, script) in config.scripts.iter().enumerate() {
+                if script.script_type == "streaming" {
+                    ui.label(&script.path);
+
+                    // Get the status for this script's process
+                    let status = statuses.get(i).cloned().unwrap_or(ProcessStatus::Finished);
+                    match status {
+                        ProcessStatus::Running => {
+                            ui.label("Running");
+                        }
+                        ProcessStatus::Failed(Some(code)) => {
+                            ui.colored_label(
+                                egui::Color32::RED,
+                                format!("Terminated (code: {})", code),
+                            );
+                        }
+                        ProcessStatus::Failed(None) => {
+                            ui.colored_label(egui::Color32::RED, "Terminated (unknown)");
+                        }
+                        ProcessStatus::Finished => {
+                            ui.label("Stopped");
+                        }
+                    }
+
+                    ui.label("");
+                    ui.label("");
+                    ui.end_row();
+                }
             }
         }
     }

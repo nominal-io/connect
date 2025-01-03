@@ -37,7 +37,7 @@ impl StreamPoint {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProcessStatus {
     Running,
-    Failed(String), // Contains error message
+    Failed(Option<i32>), // Exit code
     Finished,
 }
 
@@ -319,10 +319,7 @@ pub fn check_process_status(stream_manager: ResMut<StreamManager>) {
                     if status.success() {
                         statuses[i] = ProcessStatus::Finished;
                     } else {
-                        statuses[i] = ProcessStatus::Failed(format!(
-                            "Process exited with code: {:?}",
-                            status.code()
-                        ));
+                        statuses[i] = ProcessStatus::Failed(status.code());
                     }
                 }
                 Ok(None) => {
@@ -331,7 +328,7 @@ pub fn check_process_status(stream_manager: ResMut<StreamManager>) {
                 }
                 Err(e) => {
                     // Error checking process status
-                    statuses[i] = ProcessStatus::Failed(format!("Error checking status: {}", e));
+                    statuses[i] = ProcessStatus::Failed(None);
                 }
             }
         }
