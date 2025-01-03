@@ -1,7 +1,9 @@
+use crate::types::Config;
 use bevy::prelude::*;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
 use std::process::Child;
 use std::sync::{Arc, Mutex};
@@ -50,6 +52,7 @@ pub struct StreamManager {
     _sender: Sender<StreamData>,
     pub streaming_processes: Arc<Mutex<Vec<(Child, ProcessStatus)>>>,
     pub debug: bool,
+    pub plot_stream_ids: HashSet<String>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -57,7 +60,7 @@ pub struct StreamData {
     pub stream_id: String,
     pub timestamp: f64,
     #[serde(default)]
-    pub value: f64, // For 2D line plots
+    pub value: f64, // For simple 2D plots
     #[serde(default)]
     pub rel_lat: f64, // For 3D position
     #[serde(default)]
@@ -72,12 +75,36 @@ pub struct StreamData {
     pub yaw: f64, // Aircraft yaw angle
 }
 
+impl StreamData {
+    // Helper method to get 2e plot coordinates
+    pub fn get_plot_coords(&self) -> [f64; 2] {
+        [self.timestamp, self.value]
+    }
+}
+
 impl StreamManager {
-    pub fn new(debug: bool) -> Self {
+    pub fn new(debug: bool, config: &Config) -> Self {
         let (sender, receiver) = bounded(MAX_FLIGHT_STREAM_POINTS);
         let running = Arc::new(Mutex::new(false));
-        let running_clone = Arc::clone(&running);
         let debug = debug;
+
+        // Collect plot stream IDs and log them
+        let plot_stream_ids: HashSet<String> = config
+            .layout
+            .plots
+            .iter()
+            .map(|plot| {
+                info!("Registering plot stream_id: {}", plot.stream_id);
+                plot.stream_id.clone()
+            })
+            .collect();
+
+        info!(
+            "Initialized StreamManager with plot_stream_ids: {:?}",
+            plot_stream_ids
+        );
+
+        let running_clone = Arc::clone(&running);
         let sender_clone = sender.clone();
 
         // Spawn ZMQ listener thread
@@ -166,6 +193,7 @@ impl StreamManager {
             _sender: sender,
             streaming_processes: Arc::new(Mutex::new(Vec::new())),
             debug,
+            plot_stream_ids,
         }
     }
 
@@ -203,6 +231,11 @@ impl StreamManager {
                 "Running state set to: {} (address: {:p})",
                 *running, &self.running
             );
+        }
+
+        // Flush the receiver buffer
+        while self.receiver.try_recv().is_ok() {
+            // Keep receiving until buffer is empty
         }
 
         // Kill all streaming processes and mark them as stopped
@@ -245,46 +278,35 @@ pub fn update_streams(stream_manager: ResMut<StreamManager>) {
         return;
     }
 
-    debug!("Checking for new stream data...");
-
     while let Ok(data) = stream_manager.receiver.try_recv() {
-        debug!("Received data for stream: {}", data.stream_id);
-
         if let Ok(mut streams) = stream_manager.streams.lock() {
-            match data.stream_id.as_str() {
-                "single_scalar_channel" => {
-                    let points = streams.entry(data.stream_id).or_default();
-                    points.push(StreamPoint::Plot2D([data.timestamp, data.value]));
-                    if points.len() > MAX_CHANNEL_STREAM_POINTS {
-                        points.remove(0);
-                    }
+            if stream_manager.plot_stream_ids.contains(&data.stream_id) {
+                let points = streams.entry(data.stream_id.clone()).or_default();
+                points.push(StreamPoint::Plot2D(data.get_plot_coords()));
+                if points.len() > MAX_CHANNEL_STREAM_POINTS {
+                    points.remove(0);
                 }
-                "flight_position" => {
-                    let points = streams.entry(data.stream_id).or_default();
-                    points.push(StreamPoint::FlightData([
-                        data.rel_lat,
-                        data.rel_lon,
-                        data.altitude,
-                        data.pitch,
-                        data.roll,
-                        data.yaw,
-                    ]));
-                    if points.len() > MAX_FLIGHT_STREAM_POINTS {
-                        points.remove(0);
-                    }
-                    if stream_manager.debug
-                        && (data.altitude == 0.0
-                            || data.pitch == 0.0
-                            || data.roll == 0.0
-                            || data.yaw == 0.0)
-                    {
-                        debug!(
-                            "Warning: Some flight data fields were missing and defaulted to 0.0"
-                        );
-                    }
+            } else if data.stream_id == "flight_position" {
+                // Handle flight position data
+                let points = streams.entry(data.stream_id.clone()).or_default();
+                points.push(StreamPoint::FlightData([
+                    data.rel_lat,
+                    data.rel_lon,
+                    data.altitude,
+                    data.pitch,
+                    data.roll,
+                    data.yaw,
+                ]));
+                if points.len() > MAX_FLIGHT_STREAM_POINTS {
+                    points.remove(0);
                 }
-                _ => {
-                    debug!("Unknown stream_id: {}", data.stream_id);
+                if stream_manager.debug
+                    && (data.altitude == 0.0
+                        || data.pitch == 0.0
+                        || data.roll == 0.0
+                        || data.yaw == 0.0)
+                {
+                    debug!("Warning: Some flight data fields were missing and defaulted to 0.0");
                 }
             }
         }

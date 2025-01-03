@@ -78,12 +78,12 @@ pub fn update_infinite_plane(
 /// # Arguments
 /// * `commands` - Commands for entity creation
 /// * `meshes` - Asset storage for meshes
-/// * `materials` - Asset storage for InfiniteGridMaterial
+/// * `grid_materials` - Asset storage for InfiniteGridMaterial
 /// * `standard_materials` - Asset storage for StandardMaterial
 fn create_scene(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<InfiniteGridMaterial>>,
+    grid_materials: &mut ResMut<Assets<InfiniteGridMaterial>>,
     standard_materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
     // Debug prints
@@ -92,7 +92,7 @@ fn create_scene(
     // Set background color to black
     commands.insert_resource(ClearColor(Color::BLACK));
 
-    let floor_material = materials.add(InfiniteGridMaterial {
+    let floor_material = grid_materials.add(InfiniteGridMaterial {
         grid_scale: 2.0,
         line_width: 0.05,
         view: unsafe { std::mem::zeroed() },
@@ -192,32 +192,6 @@ pub fn initialize_scene_with_camera(
     );
 }
 
-/// Creates a basic scene with a simple colored floor using StandardMaterial.
-/// This is an alternative to the infinite grid setup.
-///
-/// # Arguments
-/// * `commands` - Commands for entity creation
-/// * `meshes` - Asset storage for meshes
-/// * `materials` - Asset storage for StandardMaterial
-pub fn create_scene_with_basic_floor(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-) {
-    // Basic floor setup with StandardMaterial
-    let floor_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.2, 0.3, 0.8),
-        ..default()
-    });
-
-    commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(1000.0, 1000.0))),
-        MeshMaterial3d(floor_material),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        Name::new("Floor"),
-    ));
-}
-
 /// Updates the 3D scene based on configuration changes.
 /// Either clears the entire scene or reinitializes it with basic components.
 ///
@@ -230,6 +204,7 @@ pub fn create_scene_with_basic_floor(
 /// * `_asset_server` - Asset server (currently unused)
 /// * `meshes` - Asset storage for meshes
 /// * `materials` - Asset storage for materials
+/// * `grid_materials` - Asset storage for InfiniteGridMaterial
 pub fn handle_3d_scene_update(
     new_config: &Config,
     commands: &mut Commands,
@@ -239,6 +214,7 @@ pub fn handle_3d_scene_update(
     _asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    grid_materials: &mut ResMut<Assets<InfiniteGridMaterial>>,
 ) {
     if !new_config.layout.show_3d_scene {
         // Clear 3D scene
@@ -248,12 +224,23 @@ pub fn handle_3d_scene_update(
         for light_entity in light_query.iter() {
             commands.entity(light_entity).despawn_recursive();
         }
-        for entity in mesh_query.iter() {
-            commands.entity(entity).despawn_recursive();
+        for mesh_entity in mesh_query.iter() {
+            commands.entity(mesh_entity).despawn_recursive();
         }
     } else {
-        // Reinitialize the 3D scene
-        create_scene_with_basic_floor(commands, meshes, materials);
+        // Clear existing scene first
+        for camera_entity in camera_query.iter() {
+            commands.entity(camera_entity).despawn_recursive();
+        }
+        for light_entity in light_query.iter() {
+            commands.entity(light_entity).despawn_recursive();
+        }
+        for mesh_entity in mesh_query.iter() {
+            commands.entity(mesh_entity).despawn_recursive();
+        }
+
+        // Create a new scene with all components
+        create_scene(commands, meshes, grid_materials, materials);
     }
 }
 

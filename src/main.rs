@@ -28,8 +28,35 @@ use types::*;
 const DEFAULT_CONFIG_PATH: &str = "test_apps/4_flight_replay/config.toml";
 
 fn main() {
-    let default_config = PathBuf::from(DEFAULT_CONFIG_PATH);
-    let content = fs::read_to_string(&default_config).unwrap_or_default();
+    // Get the current executable's directory
+    let exe_dir = std::env::current_exe()
+        .map(|path| {
+            path.parent()
+                .unwrap_or(std::path::Path::new("."))
+                .to_path_buf()
+        })
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+
+    // Try multiple possible locations for the config file
+    let possible_paths = [
+        std::path::PathBuf::from(DEFAULT_CONFIG_PATH), // Try relative to working directory
+        exe_dir.join(DEFAULT_CONFIG_PATH),             // Try relative to executable
+    ];
+
+    let (content, config_path) = possible_paths
+        .iter()
+        .find_map(|path| {
+            fs::read_to_string(path)
+                .ok()
+                .map(|content| (content, path.clone()))
+        })
+        .unwrap_or_else(|| {
+            (
+                String::default(),
+                std::path::PathBuf::from(DEFAULT_CONFIG_PATH),
+            )
+        });
+
     let config: Config = toml::from_str(&content).unwrap_or_default();
 
     // Initialize Bevy app
@@ -41,21 +68,14 @@ fn main() {
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        title: config.layout.title.unwrap_or("Connect".to_string()),
+                        title: config.layout.title.clone().unwrap_or("Connect".to_string()),
                         mode: WindowMode::Windowed,
                         ..default()
                     }),
                     ..default()
                 })
                 .set(LogPlugin {
-                    filter: format!(
-                        "connect::executors::streaming={}",
-                        if config.debug.streaming {
-                            "debug"
-                        } else {
-                            "info"
-                        }
-                    ),
+                    filter: "connect=info,wgpu=error".to_string(),
                     level: bevy::log::Level::INFO,
                     ..default()
                 }),
@@ -70,15 +90,20 @@ fn main() {
         app.add_plugins(
             DefaultPlugins
                 .build()
-                .disable::<bevy::render::RenderPlugin>(),
+                .disable::<bevy::render::RenderPlugin>()
+                .set(LogPlugin {
+                    filter: "connect=info,wgpu=error".to_string(),
+                    level: bevy::log::Level::INFO,
+                    ..default()
+                }),
         );
     }
 
     app.add_plugins(EguiPlugin)
-        .insert_resource(StreamManager::new(config.debug.streaming))
+        .insert_resource(StreamManager::new(config.debug.streaming, &config))
         .insert_resource(ScriptOutputs::default())
         .insert_resource(AppState {
-            opened_file: Some(default_config),
+            opened_file: Some(config_path),
             ..default()
         })
         .insert_resource(UiState {
@@ -136,6 +161,7 @@ fn egui_system(
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut grid_materials: ResMut<Assets<InfiniteGridMaterial>>,
 ) {
     // Create a longer-lived binding for the default path
     let default_path = PathBuf::from("config.toml");
@@ -196,6 +222,7 @@ fn egui_system(
             &asset_server,
             &mut meshes,
             &mut materials,
+            &mut grid_materials,
         );
     });
 

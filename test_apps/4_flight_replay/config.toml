@@ -27,12 +27,21 @@ id = "controls"
 label = "Controls"
 
 # Plot configuration
-[layout.plot]
+[[layout.plots]]
 type = "line"
-title = "Streaming Data Plot"
+stream_id = "aircraft_pitch"
+title = "Aircraft Yaw"
 x_label = "Time (s)"
-y_label = "Value"
-tab = "controls"              # Assign to second tab
+y_label = "Yaw (degrees)"
+tab = "controls"
+
+[[layout.plots]]
+type = "line"
+stream_id = "aircraft_altitude"
+title = "Aircraft Altitude"
+x_label = "Time (s)"
+y_label = "Altitude (ft)"
+tab = "controls"
 
 # Python scripts
 

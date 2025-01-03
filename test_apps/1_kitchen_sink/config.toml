@@ -11,7 +11,7 @@ logo_path = "assets/logo.png"
 # Right panel configuration
 [layout.right_panel]
 enabled = true
-default_width = 0.5  # Fraction of window width
+default_width = 0.5 # Fraction of window width
 
 [[layout.right_panel.tabs]]
 id = "controls"
@@ -25,26 +25,27 @@ label = "Instructions"
 # Documentation configuration
 [layout.docs]
 path = "instructions.md"
-tab = "docs"  # Assign to first tab
+tab = "docs"             # Assign to first tab
 
 # Plot configuration
-[layout.plot]
+[[layout.plots]]
+stream_id = "sine_wave"
 type = "line"
-title = "Streaming Data Plot"
+title = "Sine wave"
 x_label = "Time (s)"
 y_label = "Value"
-tab = "controls"  # Assign to second tab
+tab = "controls"        # Assign to second tab
 
 # Input fields configuration
 [[layout.input_fields]]
 id = "filter"
 label = "Filter Expression"
-tab = "controls"  # Assign to second tab
+tab = "controls"            # Assign to second tab
 
 [[layout.input_fields]]
 id = "threshold"
 label = "Threshold Value"
-tab = "controls"  # Assign to second tab
+tab = "controls"          # Assign to second tab
 
 # Slider configuration
 [[layout.sliders]]
@@ -53,7 +54,7 @@ label = "Frequency"
 min = 0.0
 max = 10.0
 default = 1.0
-tab = "controls"  # Assign to second tab
+tab = "controls"    # Assign to second tab
 
 [[layout.sliders]]
 id = "y_axis_offset"
@@ -61,7 +62,7 @@ label = "Offset"
 min = -5.0
 max = 5.0
 default = 0.0
-tab = "controls"  # Assign to second tab
+tab = "controls"     # Assign to second tab
 
 [[layout.input_fields]]
 id = "csv_path"
@@ -75,17 +76,27 @@ label = "Table View"
 
 # Table configuration
 [layout.table]
-tab = "table_view"  # Link to the tab where the table should appear
-columns = [
-    "ID",
-    "Status",
-    "Value",
-    "Timestamp"
-]
+tab = "table_view" # Link to the tab where the table should appear
+columns = ["ID", "Status", "Value", "Timestamp"]
 data = [
-    ["001", "Active", "23.5", "2024-03-20 10:00"],
-    ["002", "Inactive", "15.7", "2024-03-20 10:01"],
-    ["003", "Active", "42.1", "2024-03-20 10:02"]
+    [
+        "001",
+        "Active",
+        "23.5",
+        "2024-03-20 10:00",
+    ],
+    [
+        "002",
+        "Inactive",
+        "15.7",
+        "2024-03-20 10:01",
+    ],
+    [
+        "003",
+        "Active",
+        "42.1",
+        "2024-03-20 10:02",
+    ],
 ]
 
 # Optional table styling (for future expansion)
@@ -113,7 +124,7 @@ path = "echo.py"
 type = "discrete"
 functions = [
     { name = "echo_one", display = "Field 1" },
-    { name = "echo_two", display = "Field 2" }
+    { name = "echo_two", display = "Field 2" },
 ]
 
 [[scripts]]

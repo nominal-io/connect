@@ -8,7 +8,6 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use crate::executors::streaming::StreamManager;
-use crate::has_streaming_scripts;
 use crate::types::*;
 
 /// Displays the left panel of the application UI if enabled in the config.
@@ -87,6 +86,7 @@ fn show_tab_bar(ui: &mut egui::Ui, selected_tab: &mut String, tabs: &[TabConfig]
         for tab in tabs {
             let selected = *selected_tab == tab.id;
             if ui.selectable_label(selected, &tab.label).clicked() {
+                debug!("Tab selected: {}", tab.id);
                 *selected_tab = tab.id.clone();
             }
         }
@@ -117,7 +117,6 @@ fn show_tab_content(
 }
 
 /// Renders the table view tab content, showing script execution results in tabular format.
-/// Includes debug logging and handles empty state display.
 fn show_table_view(ui: &mut egui::Ui, app_state: &mut AppState) {
     let now = Instant::now();
     let debug_interval = Duration::from_secs(1);
@@ -300,28 +299,39 @@ fn show_plot_if_configured(
     config: &Config,
     stream_manager: &StreamManager,
 ) {
-    if config.layout.plot.tab == tab_id {
-        ui.push_id("plot_container", |ui| {
-            let plot = Plot::new("streaming_plot").view_aspect(2.0);
-            plot.show(ui, |plot_ui| {
-                if has_streaming_scripts(&config.scripts) {
-                    if let Ok(streams) = stream_manager.streams.lock() {
-                        // Changed from "sine_wave" to "single_scalar_channel"
-                        if let Some(points) = streams.get("single_scalar_channel") {
-                            if !points.is_empty() {
-                                let plot_points: Vec<[f64; 2]> = points
-                                    .iter()
-                                    .filter_map(|point| point.as_plot2d())
-                                    .collect();
-                                let line = Line::new(PlotPoints::new(plot_points));
-                                plot_ui.line(line);
+    let tab_plots: Vec<_> = config
+        .layout
+        .plots
+        .iter()
+        .filter(|plot| plot.tab == tab_id)
+        .collect();
+
+    if !tab_plots.is_empty() {
+        for plot_config in tab_plots {
+            ui.push_id(format!("plot_container_{}", plot_config.stream_id), |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.label(&plot_config.title);
+                });
+
+                Plot::new(format!("streaming_plot_{}", plot_config.stream_id))
+                    .view_aspect(2.0)
+                    .show(ui, |plot_ui| {
+                        if let Ok(streams) = stream_manager.streams.lock() {
+                            if let Some(points) = streams.get(&plot_config.stream_id) {
+                                if !points.is_empty() {
+                                    let plot_points: Vec<[f64; 2]> = points
+                                        .iter()
+                                        .filter_map(|point| point.as_plot2d())
+                                        .collect();
+                                    let line = Line::new(PlotPoints::new(plot_points));
+                                    plot_ui.line(line);
+                                }
                             }
                         }
-                    }
-                }
+                    });
             });
-        });
-        ui.add_space(20.0);
+            ui.add_space(20.0);
+        }
     }
 }
 

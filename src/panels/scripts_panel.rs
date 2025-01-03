@@ -1,4 +1,5 @@
 use crate::executors::streaming::{ProcessStatus, StreamManager};
+use crate::gym3d::scene::InfiniteGridMaterial;
 
 use bevy::prelude::*;
 use bevy_egui::egui;
@@ -19,7 +20,7 @@ pub fn show_scripts_panel(
     commands: &mut Commands,
     app_state: &mut AppState,
     script_outputs: &mut ScriptOutputs,
-    stream_manager: &mut StreamManager,
+    stream_manager: &mut ResMut<StreamManager>,
     ui_state: &mut UiState,
     config: &Config,
     camera_query: &Query<Entity, With<Camera3d>>,
@@ -28,6 +29,7 @@ pub fn show_scripts_panel(
     _asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    grid_materials: &mut ResMut<Assets<InfiniteGridMaterial>>,
 ) {
     ui.horizontal(|ui| {
         show_script_controls(ui, app_state, script_outputs, stream_manager, config);
@@ -43,6 +45,8 @@ pub fn show_scripts_panel(
                 _asset_server,
                 meshes,
                 materials,
+                grid_materials,
+                stream_manager,
             );
         });
     });
@@ -62,6 +66,8 @@ fn show_file_controls(
     _asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    grid_materials: &mut ResMut<Assets<InfiniteGridMaterial>>,
+    stream_manager: &mut ResMut<StreamManager>,
 ) {
     if ui.button("Open Config File").clicked() {
         if let Some(path_str) = open_file_dialog("Open File", "~", None) {
@@ -76,6 +82,8 @@ fn show_file_controls(
                 _asset_server,
                 meshes,
                 materials,
+                grid_materials,
+                stream_manager,
             );
         }
     }
@@ -97,6 +105,8 @@ fn handle_file_selection(
     _asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    grid_materials: &mut ResMut<Assets<InfiniteGridMaterial>>,
+    stream_manager: &mut ResMut<StreamManager>,
 ) {
     debug!("Selected file: {}", path_str);
     let new_path = PathBuf::from(path_str);
@@ -107,11 +117,30 @@ fn handle_file_selection(
                 Ok(new_config) => {
                     info!("Config loaded successfully: {:?}", new_config);
 
-                    // Clear existing state
-                    app_state.input_values.clear();
-                    app_state.script_results.clear();
-                    app_state.slider_values.clear();
+                    // Stop any existing streaming
+                    stream_manager.stop_streaming();
 
+                    // Reinitialize StreamManager with new config
+                    **stream_manager = StreamManager::new(stream_manager.debug, &new_config);
+
+                    // Reset app state completely
+                    *app_state = AppState {
+                        opened_file: Some(new_path),
+                        ..Default::default()
+                    };
+
+                    // Clear existing scene first
+                    for camera_entity in camera_query.iter() {
+                        commands.entity(camera_entity).despawn_recursive();
+                    }
+                    for light_entity in light_query.iter() {
+                        commands.entity(light_entity).despawn_recursive();
+                    }
+                    for mesh_entity in mesh_query.iter() {
+                        commands.entity(mesh_entity).despawn_recursive();
+                    }
+
+                    // Initialize new scene
                     handle_3d_scene_update(
                         &new_config,
                         commands,
@@ -121,6 +150,7 @@ fn handle_file_selection(
                         _asset_server,
                         meshes,
                         materials,
+                        grid_materials,
                     );
 
                     // Initialize sliders
@@ -130,11 +160,12 @@ fn handle_file_selection(
                             .insert(slider.id.clone(), slider.default);
                     }
 
-                    app_state.opened_file = Some(new_path);
-
                     // Update selected tab
                     if let Some(first_tab) = new_config.layout.right_panel.tabs.first() {
                         ui_state.right_selected_tab = first_tab.id.clone();
+                    }
+                    if let Some(first_tab) = new_config.layout.left_panel.tabs.first() {
+                        ui_state.left_selected_tab = first_tab.id.clone();
                     }
                 }
                 Err(e) => error!("Failed to parse config: {}", e),
@@ -153,15 +184,13 @@ fn show_script_controls(
     config: &Config,
 ) {
     if ui
-        .button(
-            egui::RichText::new("Execute All Scripts").color(egui::Color32::from_rgb(0, 255, 0)),
-        )
+        .button(egui::RichText::new("▶ Execute Scripts").color(egui::Color32::from_rgb(0, 255, 0)))
         .clicked()
     {
         handle_execute_all(app_state, script_outputs, stream_manager, config);
     }
 
-    if has_streaming_scripts(&config.scripts) && ui.button("Stop Streaming").clicked() {
+    if has_streaming_scripts(&config.scripts) && ui.button("⏸ Pause Streaming").clicked() {
         stream_manager.stop_streaming();
     }
 }
