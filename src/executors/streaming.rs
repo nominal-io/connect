@@ -48,8 +48,7 @@ pub struct StreamManager {
     running: Arc<Mutex<bool>>,
     receiver: Receiver<StreamData>,
     _sender: Sender<StreamData>,
-    streaming_processes: Arc<Mutex<Vec<Child>>>,
-    pub process_statuses: Arc<Mutex<Vec<ProcessStatus>>>,
+    pub streaming_processes: Arc<Mutex<Vec<(Child, ProcessStatus)>>>,
     pub debug: bool,
 }
 
@@ -166,7 +165,6 @@ impl StreamManager {
             receiver,
             _sender: sender,
             streaming_processes: Arc::new(Mutex::new(Vec::new())),
-            process_statuses: Arc::new(Mutex::new(Vec::new())),
             debug,
         }
     }
@@ -174,7 +172,7 @@ impl StreamManager {
     pub fn start_streaming(&mut self) {
         // Kill any existing streaming processes
         if let Ok(mut processes) = self.streaming_processes.lock() {
-            for process in processes.iter_mut() {
+            for (process, _) in processes.iter_mut() {
                 let _ = process.kill();
             }
             processes.clear();
@@ -209,27 +207,17 @@ impl StreamManager {
 
         // Kill all streaming processes and mark them as stopped
         if let Ok(mut processes) = self.streaming_processes.lock() {
-            for process in processes.iter_mut() {
+            for (process, status) in processes.iter_mut() {
                 let _ = process.kill();
+                *status = ProcessStatus::Stopped;
             }
             processes.clear();
-
-            // Mark all processes as stopped
-            if let Ok(mut statuses) = self.process_statuses.lock() {
-                for status in statuses.iter_mut() {
-                    *status = ProcessStatus::Stopped;
-                }
-            }
         }
 
         // Clear the streams data
         if let Ok(mut streams) = self.streams.lock() {
             streams.clear();
         }
-    }
-
-    pub fn is_running(&self) -> bool {
-        self.running.lock().map(|guard| *guard).unwrap_or(false)
     }
 
     pub fn add_streaming_process(&mut self, mut child: Child) {
@@ -247,10 +235,7 @@ impl StreamManager {
 
         // Store the process and its initial status
         if let Ok(mut processes) = self.streaming_processes.lock() {
-            processes.push(child);
-            if let Ok(mut statuses) = self.process_statuses.lock() {
-                statuses.push(ProcessStatus::Stopped);
-            }
+            processes.push((child, ProcessStatus::Running));
         }
     }
 }
@@ -307,32 +292,25 @@ pub fn update_streams(stream_manager: ResMut<StreamManager>) {
 }
 
 pub fn check_process_status(stream_manager: ResMut<StreamManager>) {
-    if let (Ok(mut processes), Ok(mut statuses)) = (
-        stream_manager.streaming_processes.lock(),
-        stream_manager.process_statuses.lock(),
-    ) {
-        for (i, process) in processes.iter_mut().enumerate() {
-            if i >= statuses.len() {
-                continue;
-            }
-
+    if let Ok(mut processes) = stream_manager.streaming_processes.lock() {
+        for (process, status) in processes.iter_mut() {
             match process.try_wait() {
-                Ok(Some(status)) => {
+                Ok(Some(exit_status)) => {
                     // Process has finished
-                    if status.success() {
-                        statuses[i] = ProcessStatus::Finished;
+                    *status = if exit_status.success() {
+                        ProcessStatus::Finished
                     } else {
-                        statuses[i] = ProcessStatus::Failed(status.code());
-                    }
+                        ProcessStatus::Failed(exit_status.code())
+                    };
                 }
                 Ok(None) => {
                     // Process is still running
-                    statuses[i] = ProcessStatus::Running;
+                    *status = ProcessStatus::Running;
                 }
                 Err(e) => {
                     error!("Error checking process status: {:?}", e);
                     // Error checking process status, assume the script isn't running
-                    statuses[i] = ProcessStatus::Failed(None);
+                    *status = ProcessStatus::Failed(None);
                 }
             }
         }

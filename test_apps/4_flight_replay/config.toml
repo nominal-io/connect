@@ -11,7 +11,7 @@ logo_path = "assets/logo.png"
 # Left panel configuration (new section)
 [layout.left_panel]
 enabled = true
-default_width = 0.2  # Fraction of window width
+default_width = 0.2 # Fraction of window width
 
 [[layout.left_panel.tabs]]
 id = "docs"
@@ -20,7 +20,7 @@ label = "Instructions"
 # Right panel configuration
 [layout.right_panel]
 enabled = true
-default_width = 0.2  # Fraction of window width
+default_width = 0.2 # Fraction of window width
 
 [[layout.right_panel.tabs]]
 id = "controls"
@@ -32,7 +32,7 @@ type = "line"
 title = "Streaming Data Plot"
 x_label = "Time (s)"
 y_label = "Value"
-tab = "controls"  # Assign to second tab
+tab = "controls"              # Assign to second tab
 
 # Python scripts
 
@@ -41,3 +41,7 @@ name = "Flight Replay"
 path = "flight_replay.py"
 type = "streaming"
 
+[[scripts]]
+name = "Fail Status"
+path = "fail_status.py"
+type = "streaming"
