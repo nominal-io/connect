@@ -151,6 +151,7 @@ fn handle_file_selection(
                         meshes,
                         materials,
                         grid_materials,
+                        app_state,
                     );
 
                     // Initialize sliders

@@ -1,7 +1,9 @@
 use crate::executors::streaming::StreamManager;
 use crate::gym3d::camera::OrbitCamera;
+use crate::types::AppState;
 use crate::Config;
 use bevy::{
+    asset::LoadState,
     prelude::*,
     reflect::TypePath,
     render::mesh::Indices,
@@ -12,6 +14,7 @@ use bevy::{
         view::ViewUniform,
     },
 };
+use std::path::Path;
 
 /// Material for rendering an infinite grid with customizable scale and line width.
 /// Used for creating a visual reference plane in 3D space.
@@ -80,11 +83,14 @@ pub fn update_infinite_plane(
 /// * `meshes` - Asset storage for meshes
 /// * `grid_materials` - Asset storage for InfiniteGridMaterial
 /// * `standard_materials` - Asset storage for StandardMaterial
+/// * `asset_server` - Asset server for loading GLTF models
 fn create_scene(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     grid_materials: &mut ResMut<Assets<InfiniteGridMaterial>>,
     standard_materials: &mut ResMut<Assets<StandardMaterial>>,
+    asset_server: &Res<AssetServer>,
+    app_state: &AppState,
 ) {
     // Debug prints
     debug!("Creating scene...");
@@ -113,18 +119,38 @@ fn create_scene(
 
     const CUBE_LENGTH: f32 = 1.0;
 
-    // Add glowing white cube
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(CUBE_LENGTH, CUBE_LENGTH, CUBE_LENGTH))),
-        MeshMaterial3d(standard_materials.add(StandardMaterial {
-            base_color: Color::WHITE,
-            emissive: Color::WHITE.into(),
-            ..default()
-        })),
-        Transform::from_xyz(0.0, CUBE_LENGTH / 2.0, 0.0),
-        Name::new("Glowing Cube"),
-        PositionedCube,
-    ));
+    info!("app_state.opened_file: {:?}", app_state.opened_file);
+
+    // Try to load GLTF model from assets/models directory
+    let model_path = "models/model.gltf";
+    info!("Looking for model at: {:?}", model_path);
+    let model_handle = asset_server.load(model_path);
+
+    if !matches!(
+        asset_server.get_load_state(&model_handle),
+        Some(LoadState::Failed(_))
+    ) {
+        // Spawn GLTF model
+        commands.spawn((
+            SceneRoot(model_handle),
+            Transform::from_xyz(0.0, CUBE_LENGTH / 2.0, 0.0),
+            Name::new("GLTF Model"),
+            PositionedCube,
+        ));
+    } else {
+        // Fallback to cube
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::new(CUBE_LENGTH, CUBE_LENGTH, CUBE_LENGTH))),
+            MeshMaterial3d(standard_materials.add(StandardMaterial {
+                base_color: Color::WHITE,
+                emissive: Color::WHITE.into(),
+                ..default()
+            })),
+            Transform::from_xyz(0.0, CUBE_LENGTH / 2.0, 0.0),
+            Name::new("Glowing Cube"),
+            PositionedCube,
+        ));
+    }
 
     // Add initial trail (empty)
     commands.spawn((
@@ -172,12 +198,16 @@ fn create_scene(
 /// * `materials` - Asset storage for InfiniteGridMaterial
 /// * `standard_materials` - Asset storage for StandardMaterial
 /// * `camera` - Query for accessing the camera transform and orbit settings
+/// * `asset_server` - Asset server for loading GLTF models
+/// * `app_state` - AppState for accessing configuration settings
 pub fn initialize_scene_with_camera(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<InfiniteGridMaterial>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut camera: Query<(&mut Transform, &OrbitCamera)>,
+    asset_server: Res<AssetServer>,
+    app_state: Res<AppState>,
 ) {
     // Camera setup
     if let Ok((mut transform, _)) = camera.get_single_mut() {
@@ -189,6 +219,8 @@ pub fn initialize_scene_with_camera(
         &mut meshes,
         &mut materials,
         &mut standard_materials,
+        &asset_server,
+        &app_state,
     );
 }
 
@@ -201,7 +233,7 @@ pub fn initialize_scene_with_camera(
 /// * `camera_query` - Query for finding camera entities
 /// * `light_query` - Query for finding light entities
 /// * `mesh_query` - Query for finding mesh entities
-/// * `_asset_server` - Asset server (currently unused)
+/// * `asset_server` - Asset server (currently unused)
 /// * `meshes` - Asset storage for meshes
 /// * `materials` - Asset storage for materials
 /// * `grid_materials` - Asset storage for InfiniteGridMaterial
@@ -211,10 +243,11 @@ pub fn handle_3d_scene_update(
     camera_query: &Query<Entity, With<Camera3d>>,
     light_query: &Query<Entity, With<PointLight>>,
     mesh_query: &Query<Entity, With<Mesh3d>>,
-    _asset_server: &Res<AssetServer>,
+    asset_server: &Res<AssetServer>,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     grid_materials: &mut ResMut<Assets<InfiniteGridMaterial>>,
+    app_state: &AppState,
 ) {
     if !new_config.layout.show_3d_scene {
         // Clear 3D scene
@@ -240,7 +273,14 @@ pub fn handle_3d_scene_update(
         }
 
         // Create a new scene with all components
-        create_scene(commands, meshes, grid_materials, materials);
+        create_scene(
+            commands,
+            meshes,
+            grid_materials,
+            materials,
+            asset_server,
+            app_state,
+        );
     }
 }
 

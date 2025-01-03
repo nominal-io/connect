@@ -3,6 +3,7 @@ mod gym3d;
 mod panels;
 mod types;
 
+use bevy::gltf::GltfPlugin;
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
 use bevy::window::{Window, WindowMode};
@@ -80,6 +81,7 @@ fn main() {
                     ..default()
                 }),
         )
+        .add_plugins(GltfPlugin::default())
         .add_systems(Startup, initialize_scene_with_camera)
         .add_systems(
             Update,
