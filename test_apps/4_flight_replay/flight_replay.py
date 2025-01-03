@@ -71,6 +71,4 @@ def stream_data():
 
 
 if __name__ == "__main__":
-    # print("Exiting with an error for testing")
-    # raise Exception("Test error")
     stream_data()
