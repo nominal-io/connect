@@ -1,4 +1,4 @@
-use crate::executors::streaming::StreamManager;
+use crate::executors::streaming::{ProcessStatus, StreamManager};
 use crate::gym3d::scene::InfiniteGridMaterial;
 
 use bevy::prelude::*;
@@ -255,6 +255,7 @@ fn handle_streaming_script(
     let mut child = Command::new("python3")
         .arg(&script_path)
         .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .spawn()
         .expect("Failed to spawn streaming script");
 
@@ -439,17 +440,39 @@ fn show_streaming_scripts(ui: &mut egui::Ui, stream_manager: &StreamManager, con
         ui.label("");
         ui.end_row();
 
-        for script in &config.scripts {
-            if script.script_type == "streaming" {
-                ui.label(&script.path);
-                ui.label(if stream_manager.is_running() {
-                    "Running"
-                } else {
-                    "Stopped"
-                });
-                ui.label("");
-                ui.label("");
-                ui.end_row();
+        if let Ok(processes) = stream_manager.streaming_processes.lock() {
+            for (i, script) in config.scripts.iter().enumerate() {
+                if script.script_type == "streaming" {
+                    ui.label(&script.path);
+
+                    // Get the status for this script's process
+                    let status = processes
+                        .get(i)
+                        .map(|(_, status)| status.clone())
+                        .unwrap_or(ProcessStatus::Stopped);
+
+                    match status {
+                        ProcessStatus::Running => {
+                            ui.label("Running");
+                        }
+                        ProcessStatus::Failed(Some(code)) => {
+                            ui.colored_label(egui::Color32::RED, format!("Error (code: {})", code));
+                        }
+                        ProcessStatus::Failed(None) => {
+                            ui.colored_label(egui::Color32::RED, "Terminated (unknown)");
+                        }
+                        ProcessStatus::Finished => {
+                            ui.colored_label(egui::Color32::GREEN, "Finished");
+                        }
+                        ProcessStatus::Stopped => {
+                            ui.label("Stopped");
+                        }
+                    }
+
+                    ui.label("");
+                    ui.label("");
+                    ui.end_row();
+                }
             }
         }
     }

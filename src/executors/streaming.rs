@@ -1,4 +1,5 @@
 use crate::types::Config;
+use bevy::log::info;
 use bevy::prelude::*;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use serde::Deserialize;
@@ -36,13 +37,21 @@ impl StreamPoint {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProcessStatus {
+    Running,
+    Failed(Option<i32>), // Exit code
+    Finished,            // Finished execution itself
+    Stopped,             // Stopped by this process
+}
+
 #[derive(Resource)]
 pub struct StreamManager {
     pub streams: Arc<Mutex<HashMap<String, Vec<StreamPoint>>>>,
     running: Arc<Mutex<bool>>,
     receiver: Receiver<StreamData>,
     _sender: Sender<StreamData>,
-    streaming_processes: Arc<Mutex<Vec<Child>>>,
+    pub streaming_processes: Arc<Mutex<Vec<(Child, ProcessStatus)>>>,
     pub debug: bool,
     pub plot_stream_ids: HashSet<String>,
 }
@@ -192,7 +201,7 @@ impl StreamManager {
     pub fn start_streaming(&mut self) {
         // Kill any existing streaming processes
         if let Ok(mut processes) = self.streaming_processes.lock() {
-            for process in processes.iter_mut() {
+            for (process, _) in processes.iter_mut() {
                 let _ = process.kill();
             }
             processes.clear();
@@ -230,10 +239,11 @@ impl StreamManager {
             // Keep receiving until buffer is empty
         }
 
-        // Kill all streaming processes
+        // Kill all streaming processes and mark them as stopped
         if let Ok(mut processes) = self.streaming_processes.lock() {
-            for process in processes.iter_mut() {
+            for (process, status) in processes.iter_mut() {
                 let _ = process.kill();
+                *status = ProcessStatus::Stopped;
             }
             processes.clear();
         }
@@ -244,10 +254,6 @@ impl StreamManager {
         }
     }
 
-    pub fn is_running(&self) -> bool {
-        self.running.lock().map(|guard| *guard).unwrap_or(false)
-    }
-
     pub fn add_streaming_process(&mut self, mut child: Child) {
         // Redirect stdout to capture Python script output
         if let Some(stdout) = child.stdout.take() {
@@ -255,15 +261,27 @@ impl StreamManager {
             thread::spawn(move || {
                 for line in stdout_reader.lines() {
                     if let Ok(line) = line {
-                        info!("Python output: {}", line);
+                        info!("[py stdout] {}", line);
                     }
                 }
             });
         }
 
-        // Store the process
+        // Also capture stderr if present
+        if let Some(stderr) = child.stderr.take() {
+            let stderr_reader = BufReader::new(stderr);
+            thread::spawn(move || {
+                for line in stderr_reader.lines() {
+                    if let Ok(line) = line {
+                        warn!("[py stderr] {}", line);
+                    }
+                }
+            });
+        }
+
+        // Store the process and its initial status
         if let Ok(mut processes) = self.streaming_processes.lock() {
-            processes.push(child);
+            processes.push((child, ProcessStatus::Running));
         }
     }
 }
@@ -302,6 +320,32 @@ pub fn update_streams(stream_manager: ResMut<StreamManager>) {
                         || data.yaw == 0.0)
                 {
                     debug!("Warning: Some flight data fields were missing and defaulted to 0.0");
+                }
+            }
+        }
+    }
+}
+
+pub fn check_process_status(stream_manager: ResMut<StreamManager>) {
+    if let Ok(mut processes) = stream_manager.streaming_processes.lock() {
+        for (process, status) in processes.iter_mut() {
+            match process.try_wait() {
+                Ok(Some(exit_status)) => {
+                    // Process has finished
+                    *status = if exit_status.success() {
+                        ProcessStatus::Finished
+                    } else {
+                        ProcessStatus::Failed(exit_status.code())
+                    };
+                }
+                Ok(None) => {
+                    // Process is still running
+                    *status = ProcessStatus::Running;
+                }
+                Err(e) => {
+                    error!("Error checking process status: {:?}", e);
+                    // Error checking process status, assume the script isn't running
+                    *status = ProcessStatus::Failed(None);
                 }
             }
         }

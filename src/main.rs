@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use executors::{
     discrete::execute_script,
-    streaming::{update_streams, StreamManager},
+    streaming::{check_process_status, update_streams, StreamManager},
 };
 use gym3d::{
     camera::{orbit_camera, setup_isometric_camera},
@@ -128,7 +128,13 @@ fn main() {
 
     app.add_systems(
         Update,
-        (egui_system, update_streams, update_cube_position).in_set(AppSet::Main),
+        (
+            egui_system,
+            update_streams,
+            update_cube_position,
+            check_process_status,
+        )
+            .in_set(AppSet::Main),
     )
     .run();
 }

@@ -49,3 +49,8 @@ tab = "controls"
 name = "Flight Replay"
 path = "flight_replay.py"
 type = "streaming"
+
+[[scripts]]
+name = "Fail Status"
+path = "fail_status.py"
+type = "streaming"
