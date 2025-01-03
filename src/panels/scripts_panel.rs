@@ -255,6 +255,7 @@ fn handle_streaming_script(
     let mut child = Command::new("python3")
         .arg(&script_path)
         .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .spawn()
         .expect("Failed to spawn streaming script");
 

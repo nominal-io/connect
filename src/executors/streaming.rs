@@ -1,4 +1,5 @@
 use crate::types::Config;
+use bevy::log::info;
 use bevy::prelude::*;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use serde::Deserialize;
@@ -260,7 +261,19 @@ impl StreamManager {
             thread::spawn(move || {
                 for line in stdout_reader.lines() {
                     if let Ok(line) = line {
-                        info!("Python output: {}", line);
+                        info!("[py stdout] {}", line);
+                    }
+                }
+            });
+        }
+
+        // Also capture stderr if present
+        if let Some(stderr) = child.stderr.take() {
+            let stderr_reader = BufReader::new(stderr);
+            thread::spawn(move || {
+                for line in stderr_reader.lines() {
+                    if let Ok(line) = line {
+                        warn!("[py stderr] {}", line);
                     }
                 }
             });
