@@ -43,21 +43,45 @@ def stream_data():
     print("Bound ZMQ socket to tcp://*:5555", flush=True)
 
     try:
-        # Stream each row of the dataframe
-        for row in df.iter_rows(named=True):
-            data = {
-                "stream_id": "flight_position",
-                "timestamp": float(row['timestamps_ns']) / 1e9,  # Convert ns to seconds
-                "rel_lat": float(row['rel_lat']) * LAT_LON_SCALE_FACTOR,
-                "rel_lon": float(row['rel_lon']) * LAT_LON_SCALE_FACTOR,
-                "altitude": (float(row['OSD.height [ft]']) * ALTITUDE_SCALE_FACTOR) + ALTITUDE_OFFSET,
-                "pitch": float(row['OSD.pitch']),
-                "roll": float(row['OSD.roll']),
-                "yaw": float(row['OSD.yaw'])
-            }
-            print(f"Sending data: {data}", flush=True)
-            socket.send_string(json.dumps(data))
-            time.sleep(0.01)  # Add a small delay
+        while True:  # Add continuous loop
+            # Stream each row of the dataframe
+            for row in df.iter_rows(named=True):
+                timestamp = float(row['timestamps_ns']) / 1e9  # Convert ns to seconds
+                
+                # Stream flight position data
+                flight_data = {
+                    "stream_id": "flight_position",
+                    "timestamp": timestamp,
+                    "rel_lat": float(row['rel_lat']) * LAT_LON_SCALE_FACTOR,
+                    "rel_lon": float(row['rel_lon']) * LAT_LON_SCALE_FACTOR,
+                    "altitude": (float(row['OSD.height [ft]']) * ALTITUDE_SCALE_FACTOR) + ALTITUDE_OFFSET,
+                    "pitch": float(row['OSD.pitch']),
+                    "roll": float(row['OSD.roll']),
+                    "yaw": float(row['OSD.yaw'])
+                }
+                socket.send_string(json.dumps(flight_data))
+
+                # Stream yaw data for 2D plot
+                yaw_data = {
+                    "stream_id": "aircraft_pitch",
+                    "timestamp": timestamp,
+                    "value": float(row['OSD.pitch'])
+                }
+                socket.send_string(json.dumps(yaw_data))
+                
+                # Stream altitude data for 2D plot
+                altitude_data = {
+                    "stream_id": "aircraft_altitude",
+                    "timestamp": timestamp,
+                    "value": float(row['OSD.height [ft]'])
+                }
+                socket.send_string(json.dumps(altitude_data))
+                
+                time.sleep(0.01)  # Add a small delay
+            
+            # Optional: Add a small delay between replays
+            time.sleep(0.1)
+            
     except Exception as e:
         print(f"Error in stream_data: {e}", flush=True)
     finally:

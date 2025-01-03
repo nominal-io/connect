@@ -5,17 +5,20 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
+/// System set used to organize the main application systems
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum AppSet {
     Main,
 }
 
+/// Configuration for a function within a script, defining its name and display properties
 #[derive(Deserialize, Debug)]
 pub struct FunctionConfig {
     pub name: String,
     pub display: String,
 }
 
+/// Configuration for a script file, including its path, type and available functions
 #[derive(Deserialize, Debug)]
 pub struct ScriptConfig {
     pub name: String,
@@ -26,6 +29,7 @@ pub struct ScriptConfig {
     pub functions: Vec<FunctionConfig>,
 }
 
+/// Configuration for text input fields in the UI
 #[derive(Deserialize, Debug, Default)]
 pub struct InputFieldConfig {
     #[serde(default)]
@@ -36,12 +40,17 @@ pub struct InputFieldConfig {
     pub tab: String,
 }
 
+/// Configuration for plot displays in the UI
 #[derive(Deserialize, Debug, Default)]
+#[allow(dead_code)]
 pub struct PlotConfig {
     #[serde(default)]
     pub tab: String,
+    pub title: String,
+    pub stream_id: String,
 }
 
+/// Configuration for slider controls in the UI, including range and default values
 #[derive(Deserialize, Debug)]
 pub struct SliderConfig {
     pub id: String,
@@ -65,12 +74,14 @@ impl Default for SliderConfig {
     }
 }
 
+/// Debug configuration settings for the application
 #[derive(Deserialize, Debug, Default)]
 pub struct DebugConfig {
     #[serde(default)]
     pub streaming: bool,
 }
 
+/// Main configuration structure for the entire application
 #[derive(Deserialize, Debug, Default)]
 pub struct Config {
     #[serde(default)]
@@ -81,6 +92,7 @@ pub struct Config {
     pub scripts: Vec<ScriptConfig>,
 }
 
+/// Configuration for the application's layout, including panels and UI elements
 #[derive(Deserialize, Debug, Default)]
 #[allow(dead_code)]
 pub struct LayoutConfig {
@@ -90,11 +102,11 @@ pub struct LayoutConfig {
     #[serde(default)]
     pub left_panel: PanelConfig,
     #[serde(default)]
-    pub right_panel: RightPanelConfig,
+    pub right_panel: PanelConfig,
     #[serde(default)]
     pub docs: DocsConfig,
     #[serde(default)]
-    pub plot: PlotConfig,
+    pub plots: Vec<PlotConfig>,
     #[serde(default)]
     pub input_fields: Vec<InputFieldConfig>,
     #[serde(default)]
@@ -113,6 +125,7 @@ pub fn default_slider_value() -> f32 {
     0.0
 }
 
+/// Represents tabular data with columns and rows, used for displaying script outputs
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct TableData {
     pub columns: Vec<String>,
@@ -137,8 +150,8 @@ where
         .collect())
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(Default)]
+/// Tracks the display state of tables, including debug timing information
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct TableDisplayState {
     #[serde(skip)]
     pub last_debug: Option<Instant>,
@@ -146,7 +159,7 @@ pub struct TableDisplayState {
     pub table_debugs: HashMap<String, Instant>,
 }
 
-
+/// Stores the current state of the application, including user inputs and script results
 #[derive(Resource, Default, Debug, Serialize)]
 pub struct AppState {
     pub input_values: HashMap<String, String>,
@@ -163,24 +176,58 @@ impl AppState {
     }
 }
 
+/// Stores script execution outputs for display
 #[derive(Resource, Default)]
 pub struct ScriptOutputs {
     pub results: Vec<String>,
 }
 
+/// Cache for rendered markdown content
 #[derive(Resource, Default)]
 pub struct MarkdownCache {
     pub cache: CommonMarkCache,
 }
 
+/// Tracks the current state of the UI, such as selected tabs
 #[derive(Resource, Default)]
 pub struct UiState {
     pub left_selected_tab: String,
     pub right_selected_tab: String,
 }
 
+/// Configuration for a tab in the UI panels
 #[derive(Deserialize, Debug, Default)]
-pub struct RightPanelConfig {
+pub struct TabConfig {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+}
+
+/// Configuration for documentation display in the UI
+#[derive(Deserialize, Debug, Default)]
+pub struct DocsConfig {
+    #[serde(default)]
+    pub path: String,
+    #[serde(default)]
+    pub tab: String,
+}
+
+/// Configuration for table display in the UI
+#[derive(Deserialize, Debug, Default)]
+#[allow(dead_code)]
+pub struct TableConfig {
+    #[serde(default)]
+    pub tab: String,
+    #[serde(default)]
+    pub columns: Vec<String>,
+    #[serde(default)]
+    pub data: Vec<Vec<String>>,
+}
+
+/// Configuration for UI panels, including width and tab settings
+#[derive(Deserialize, Debug, Default)]
+pub struct PanelConfig {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default = "default_panel_width")]
@@ -191,59 +238,4 @@ pub struct RightPanelConfig {
 
 pub fn default_panel_width() -> f32 {
     0.3
-}
-
-#[derive(Deserialize, Debug, Default)]
-pub struct TabConfig {
-    #[serde(default)]
-    pub id: String,
-    #[serde(default)]
-    pub label: String,
-}
-
-#[derive(Deserialize, Debug, Default)]
-pub struct DocsConfig {
-    #[serde(default)]
-    pub path: String,
-    #[serde(default)]
-    pub tab: String,
-}
-
-#[derive(Deserialize, Debug, Default)]
-#[allow(dead_code)]
-pub struct TableStyleConfig {
-    #[serde(default)]
-    pub striped: bool,
-    #[serde(default)]
-    pub borders: bool,
-    pub header_background: Option<String>,
-    #[serde(default = "default_row_height")]
-    pub row_height: f32,
-}
-
-pub fn default_row_height() -> f32 {
-    30.0
-}
-
-#[derive(Deserialize, Debug, Default)]
-#[allow(dead_code)]
-pub struct TableConfig {
-    #[serde(default)]
-    pub tab: String,
-    #[serde(default)]
-    pub columns: Vec<String>,
-    #[serde(default)]
-    pub data: Vec<Vec<String>>,
-    #[serde(default)]
-    pub style: TableStyleConfig,
-}
-
-#[derive(Deserialize, Debug, Default)]
-pub struct PanelConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default = "default_panel_width")]
-    pub default_width: f32,
-    #[serde(default)]
-    pub tabs: Vec<TabConfig>,
 }

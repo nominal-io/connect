@@ -31,13 +31,11 @@ def stream_data():
             value = np.sin(t * frequency) + y_offset
             
             data = {
-                "stream_id": "single_scalar_channel",
+                "stream_id": "sine_wave",
                 "timestamp": float(t),
                 "value": float(value)
             }
-            print(f"Sending data: {data}", flush=True)
             socket.send_string(json.dumps(data))
-            print(f"Data sent successfully", flush=True)
             t += 0.1
             time.sleep(0.01)  # Add a small delay
     except Exception as e:
