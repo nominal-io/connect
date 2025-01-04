@@ -61,14 +61,14 @@ def stream_data():
                 }
                 socket.send_string(json.dumps(flight_data))
 
-                # Stream yaw data for 2D plot
-                yaw_data = {
+                # Stream pitch data for 2D plot
+                pitch_data = {
                     "stream_id": "aircraft_pitch",
                     "timestamp": timestamp,
                     "value": float(row['OSD.pitch'])
                 }
-                socket.send_string(json.dumps(yaw_data))
-                
+                socket.send_string(json.dumps(pitch_data))
+
                 # Stream altitude data for 2D plot
                 altitude_data = {
                     "stream_id": "aircraft_altitude",
@@ -76,6 +76,23 @@ def stream_data():
                     "value": float(row['OSD.height [ft]'])
                 }
                 socket.send_string(json.dumps(altitude_data))
+
+                # Stream yaw data for 2D plot
+                yaw_data = {
+                    "stream_id": "aircraft_yaw",
+                    "timestamp": timestamp,
+                    "value": float(row['OSD.yaw'])
+                }
+                socket.send_string(json.dumps(yaw_data))
+
+                # Stream roll data for 2D plot
+                roll_data = {
+                    "stream_id": "aircraft_roll",
+                    "timestamp": timestamp,
+                    "value": float(row['OSD.roll'])
+                }
+                socket.send_string(json.dumps(roll_data))                                
+            
                 
                 time.sleep(0.01)  # Add a small delay
             

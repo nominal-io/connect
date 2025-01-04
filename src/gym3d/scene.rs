@@ -3,7 +3,6 @@ use crate::gym3d::camera::OrbitCamera;
 use crate::types::AppState;
 use crate::Config;
 use bevy::{
-    asset::LoadState,
     prelude::*,
     reflect::TypePath,
     render::mesh::Indices,
@@ -14,7 +13,6 @@ use bevy::{
         view::ViewUniform,
     },
 };
-use std::path::Path;
 
 /// Material for rendering an infinite grid with customizable scale and line width.
 /// Used for creating a visual reference plane in 3D space.
@@ -121,36 +119,13 @@ fn create_scene(
 
     info!("app_state.opened_file: {:?}", app_state.opened_file);
 
-    // Try to load GLTF model from assets/models directory
-    let model_path = "models/model.gltf";
-    info!("Looking for model at: {:?}", model_path);
-    let model_handle = asset_server.load(model_path);
-
-    if !matches!(
-        asset_server.get_load_state(&model_handle),
-        Some(LoadState::Failed(_))
-    ) {
-        // Spawn GLTF model
-        commands.spawn((
-            SceneRoot(model_handle),
-            Transform::from_xyz(0.0, CUBE_LENGTH / 2.0, 0.0),
-            Name::new("GLTF Model"),
-            PositionedCube,
-        ));
-    } else {
-        // Fallback to cube
-        commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(CUBE_LENGTH, CUBE_LENGTH, CUBE_LENGTH))),
-            MeshMaterial3d(standard_materials.add(StandardMaterial {
-                base_color: Color::WHITE,
-                emissive: Color::WHITE.into(),
-                ..default()
-            })),
-            Transform::from_xyz(0.0, CUBE_LENGTH / 2.0, 0.0),
-            Name::new("Glowing Cube"),
-            PositionedCube,
-        ));
-    }
+    // Try to load GLB model from assets/models directory
+    commands.spawn((
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/model.glb"))),
+        Transform::from_xyz(0.0, CUBE_LENGTH * 2.0, 0.0).with_scale(Vec3::splat(2.0)),
+        Name::new("GLTF Model"),
+        PositionedCube,
+    ));
 
     // Add initial trail (empty)
     commands.spawn((
@@ -173,20 +148,25 @@ fn create_scene(
         OrbitCamera::default(),
     ));
 
-    // Add spotlight at 3 o'clock position
+    // Add directional light
     commands.spawn((
-        SpotLight {
-            intensity: 10000000.0,
-            color: Color::WHITE,
-            range: 50.0,
-            radius: 1.0,
-            outer_angle: 0.8,
-            inner_angle: 0.6,
+        DirectionalLight {
+            illuminance: 50000.0,
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(5.0, 5.0, 0.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+        Transform {
+            translation: Vec3::new(0.0, 10.0, 0.0),
+            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4),
+            ..default()
+        },
     ));
+
+    // Add ambient light to ensure model is visible from all angles
+    commands.insert_resource(AmbientLight {
+        color: Color::WHITE,
+        brightness: 0.5, // Add moderate ambient lighting (0.0 - 1.0)
+    });
 }
 
 /// Initializes the 3D scene and sets up the camera position.
@@ -376,14 +356,14 @@ pub fn update_cube_position(
                         let new_z = lon as f32;
                         transform.translation = Vec3::new(new_x, new_y, new_z);
 
-                        // Update rotation (convert angles from degrees to radians)
                         let yaw_rad = (yaw as f32).to_radians();
-                        let pitch_rad = (pitch as f32).to_radians();
-                        let roll_rad = (roll as f32).to_radians();
+                        let pitch_rad = (-pitch as f32).to_radians();
+                        // let roll_rad = (-roll as f32).to_radians();
+                        let roll_rad = (roll as f32) * 0.0;
 
-                        // Create rotation quaternion using yaw (y-axis), pitch (x-axis), and roll (z-axis)
+                        // Apply rotations in ZXY order (roll, pitch, yaw)
                         transform.rotation =
-                            Quat::from_euler(EulerRot::YXZ, yaw_rad, pitch_rad, roll_rad);
+                            Quat::from_euler(EulerRot::ZXY, roll_rad, pitch_rad, yaw_rad);
                     }
                 }
 

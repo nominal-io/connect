@@ -8,32 +8,32 @@ show_3d_scene = true
 title = "Connect"
 logo_path = "assets/logo.png"
 
+[[layout.left_panel.tabs]]
+id = "yaw_and_roll"
+label = "Yaw & Roll"
+
+[[layout.right_panel.tabs]]
+id = "pitch_and_altitude"
+label = "Pitch & Altitude"
+
 # Left panel configuration (new section)
 [layout.left_panel]
 enabled = true
 default_width = 0.2 # Fraction of window width
-
-[[layout.left_panel.tabs]]
-id = "docs"
-label = "Instructions"
 
 # Right panel configuration
 [layout.right_panel]
 enabled = true
 default_width = 0.2 # Fraction of window width
 
-[[layout.right_panel.tabs]]
-id = "controls"
-label = "Controls"
-
 # Plot configuration
 [[layout.plots]]
 type = "line"
 stream_id = "aircraft_pitch"
-title = "Aircraft Yaw"
+title = "Aircraft Pitch"
 x_label = "Time (s)"
-y_label = "Yaw (degrees)"
-tab = "controls"
+y_label = "Pitch (degrees)"
+tab = "pitch_and_altitude"
 
 [[layout.plots]]
 type = "line"
@@ -41,7 +41,23 @@ stream_id = "aircraft_altitude"
 title = "Aircraft Altitude"
 x_label = "Time (s)"
 y_label = "Altitude (ft)"
-tab = "controls"
+tab = "pitch_and_altitude"
+
+[[layout.plots]]
+type = "line"
+stream_id = "aircraft_yaw"
+title = "Aircraft Yaw"
+x_label = "Time (s)"
+y_label = "Yaw (degrees)"
+tab = "yaw_and_roll"
+
+[[layout.plots]]
+type = "line"
+stream_id = "aircraft_roll"
+title = "Aircraft Roll"
+x_label = "Time (s)"
+y_label = "Roll (degrees)"
+tab = "yaw_and_roll"
 
 # Python scripts
 
